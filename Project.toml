@@ -1,0 +1,10 @@
+name = "LegendDSP"
+uuid = "e6d7a502-be5c-5049-a927-8d60e566555d"
+
+[deps]
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
