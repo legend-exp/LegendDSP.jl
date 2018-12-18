@@ -4,6 +4,9 @@ __precompile__(true)
 
 module LegendDSP
 
+using RadiationDetectorDSP
+using RadiationDetectorSignals
+
 # package code goes here
 
 end # module
