@@ -1,12 +1,28 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
-__precompile__(true)
+"""
+    LegendDSP
 
+Template for Julia packages.
+"""
 module LegendDSP
 
+using LinearAlgebra
+using Random
+
+using ArgCheck
+using ArraysOfArrays
+using DocStringExtensions
+using FillArrays
+using FunctionChains
+using IntervalSets
 using RadiationDetectorDSP
 using RadiationDetectorSignals
+using Unitful
 
-# package code goes here
+import Adapt
+
+
+# include("SOMETHING.jl")
 
 end # module

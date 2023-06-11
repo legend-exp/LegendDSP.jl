@@ -1,8 +1,9 @@
 [deps]
+Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
-Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
 RadiationDetectorDSP = "afd6e06f-c550-5763-af36-7391d39e46ec"
 RadiationDetectorSignals = "bf2c0563-65cf-5db2-a620-ceb7de82658c"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 Documenter = "~0.27"
