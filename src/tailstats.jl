@@ -1,4 +1,4 @@
-# This file is a part of RadiationDetectorDSP.jl, licensed under the MIT License (MIT).
+# This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 
 """
@@ -27,7 +27,11 @@ function _tailstats_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuantity}, 
     @assert firstindex(Y) <= first(idxs) <= last(idxs) <= lastindex(Y)
 
     if any(Y[idxs] .<= 0)
-        return zero(X[1]/Y[1])
+        return (
+            mean = zero(Y[1]),
+            sigma = zero(Y[1]),
+            τ = zero(X[1]/Y[1])     
+        )
     end
     
 
@@ -61,5 +65,9 @@ function _tailstats_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuantity}, 
     slope = cov_XY / var_X
     # offset = mean_Y - slope * mean_X
 
-    return -1/slope
+    (
+        mean = mean_Y,
+        sigma = sqrt(var_Y),
+        τ = -1/slope        
+    )
 end
