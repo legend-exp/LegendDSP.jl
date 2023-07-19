@@ -7,7 +7,6 @@
 
 Get statistics on the logarhithmic of the tail of a `signal` in the interval (`start`,`stop`).
 """
-
 function tailstats end
 export tailstats
 
