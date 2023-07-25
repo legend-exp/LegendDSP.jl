@@ -35,9 +35,9 @@ include("filter_optimization.jl")
 include("dsp_icpc.jl")
 include("saturation.jl")
 
-@static if !isdefined(Base, :get_extension)
-    # using Requires
-    include("../ext/LegendDSPRecipesBaseExt.jl")
-end
+# @static if !isdefined(Base, :get_extension)
+#     # using Requires
+#     include("../ext/LegendDSPRecipesBaseExt.jl")
+# end
 
 end # module
