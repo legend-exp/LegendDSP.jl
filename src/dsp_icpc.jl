@@ -109,8 +109,9 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     # get position and multiplicity of in-trace pile-up
     inTrace_pileUp      = flt_intersec_inTrace.(reverse_waveform.(wvfs_sgflt_deriv), inTraceCut)
-    inTrace_intersect   = inTrace_pileUp.x
+    inTrace_intersect   = wvfs_pz.time[1][end] .- inTrace_pileUp.x
     inTrace_n           = inTrace_pileUp.multiplicity
+
 
 
     # output Table 

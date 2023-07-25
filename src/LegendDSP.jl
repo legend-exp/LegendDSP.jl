@@ -36,7 +36,7 @@ include("dsp_icpc.jl")
 include("saturation.jl")
 
 @static if !isdefined(Base, :get_extension)
-    using Requires
+    # using Requires
     include("../ext/LegendDSPRecipesBaseExt.jl")
 end
 
