@@ -63,6 +63,7 @@ function _tailstats_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuantity}, 
 
     slope = cov_XY / var_X
     # offset = mean_Y - slope * mean_X
+    var_Y = ifelse(var_Y < 0, zero(var_Y), var_Y)
 
     (
         mean = mean_Y,
