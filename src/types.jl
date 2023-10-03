@@ -18,6 +18,7 @@ Configuration parameters for DSP algorithms.
 - `e_grid_ft_zac::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for ZAC filter
 - `e_grid_rt_cusp::StepRangeLen{Quantity{<:T}}`: rise time grid scan range for CUSP filter
 - `e_grid_ft_cusp::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for CUSP filter
+- `e_grid_rt_sg::StepRangeLen{Quantity{<:T}}`: window length grid scan range for SG filter
 
 # Examples
 ```julia
@@ -55,13 +56,16 @@ struct DSPConfig{T <: Real}
     e_grid_rt_trap::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
     e_grid_ft_trap::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
 
-    # # rise and flat-top time grid scan ranges for ZAC filter
+    # rise and flat-top time grid scan ranges for ZAC filter
     e_grid_rt_zac::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
     e_grid_ft_zac::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
 
-    # # rise and flat-top time grid scan ranges for CUSP filter
+    # rise and flat-top time grid scan ranges for CUSP filter
     e_grid_rt_cusp::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
     e_grid_ft_cusp::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
+    
+    # window length grid scan range for SG filter in current determination
+    a_grid_wl_sg::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
 end
 export DSPConfig
 

@@ -35,5 +35,7 @@ function create_dsp_config(dsp_metadata::PropDicts.PropDict)
         dsp_metadata.e_grid_zac.ft.start*u"µs":dsp_metadata.e_grid_zac.ft.step*u"µs":dsp_metadata.e_grid_zac.ft.stop*u"µs",
         # rise and flat-top time grid scan ranges for CUSP filter
         dsp_metadata.e_grid_cusp.rt.start*u"µs":dsp_metadata.e_grid_cusp.rt.step*u"µs":dsp_metadata.e_grid_cusp.rt.stop*u"µs",
-        dsp_metadata.e_grid_cusp.ft.start*u"µs":dsp_metadata.e_grid_cusp.ft.step*u"µs":dsp_metadata.e_grid_cusp.ft.stop*u"µs")
+        dsp_metadata.e_grid_cusp.ft.start*u"µs":dsp_metadata.e_grid_cusp.ft.step*u"µs":dsp_metadata.e_grid_cusp.ft.stop*u"µs",
+        # window length grid scan range for SG filter in current determination
+        dsp_metadata.a_grid_wl_sg.start*u"ns":dsp_metadata.a_grid_wl_sg.step*u"ns":dsp_metadata.a_grid_wl_sg.stop*u"ns")
 end
