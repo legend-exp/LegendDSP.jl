@@ -5,4 +5,4 @@ RadiationDetectorDSP = "afd6e06f-c550-5763-af36-7391d39e46ec"
 RadiationDetectorSignals = "bf2c0563-65cf-5db2-a620-ceb7de82658c"
 
 [compat]
-Documenter = "~0.27"
+Documenter = "1"
