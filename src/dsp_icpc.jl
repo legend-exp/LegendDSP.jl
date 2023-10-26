@@ -10,6 +10,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     # get optimal filter parameters
     trap_rt = pars_filter.trap_rt.val*u"µs"
     trap_ft = pars_filter.trap_ft.val*u"µs"
+    sg_wl   = pars_filter.sg_wl.val*u"ns"
 
 
     # get waveform data 
@@ -97,9 +98,9 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
 
     # extract current with filter length of 180ns with second order polynominal and first derivative
-    sgflt_deriv = SavitzkyGolayFilter(180u"ns", 2, 1)
+    sgflt_deriv = SavitzkyGolayFilter(sg_wl, 2, 1)
     wvfs_sgflt_deriv = sgflt_deriv.(wvfs_pz)
-    current_max = maximum.(wvfs_sgflt_deriv.signal)
+    current_max = get_wvf_maximum.(wvfs_sgflt_deriv, 20u"µs", 100u"µs")
 
     # in-trace pile-up rejector
     flt_intersec_inTrace = Intersect(mintot = 100u"ns")
