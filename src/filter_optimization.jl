@@ -7,7 +7,7 @@ Get ENC noise grid values for given trap grid rise times.
 Returns:
     - `enc_trap_grid`: Array ENC noise values for the given trap rise time grid
 """
-function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, ft::Quantity{T}=4.0u"µs") where T<:Real
+function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
     # get config parameters
     bl_mean_min, bl_mean_max    = config.bl_mean
     e_grid_rt_trap              = config.e_grid_rt_trap
@@ -173,7 +173,7 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     e_rtft = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, t0 .+ (rt + ft/2))
 
     # extract current with filter length in grid with second order polynominal and first derivative
-    aoe_grid   = Array{Union{Missing, Float32}}(missing, length(a_grid_wl_sg), length(wvfs_pz))
+    aoe_grid   = ones(Float64, length(a_grid_wl_sg), length(wvfs_pz))
     for (w, wl) in enumerate(a_grid_wl_sg)
         sgflt_deriv = SavitzkyGolayFilter(wl, 2, 1)
         wvfs_sgflt_deriv = sgflt_deriv.(wvfs_pz)
@@ -181,6 +181,6 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
 
         aoe_grid[w, :]     = ustrip.(current_max) ./ e_rtft
     end
-    return (aoe = aoe_grid, e = e_rtft, blmean = bl_stats.mean, blslope = bl_stats.slope)
+    return (aoe = aoe_grid, e = e_rtft, blmean = bl_stats.mean, blslope = bl_stats.slope, t0 = t0)
 end
 export dsp_sg_optimization
