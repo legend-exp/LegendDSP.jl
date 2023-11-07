@@ -35,5 +35,7 @@ include("filter_optimization.jl")
 include("dsp_icpc.jl")
 include("saturation.jl")
 include("interpolation.jl")
+include("intersect_maximum.jl")
+include("dsp_sipm.jl")
 
 end # module
