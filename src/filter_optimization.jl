@@ -24,20 +24,6 @@ function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     deconv_flt = InvCRFilter(τ)
     wvfs_pz = deconv_flt.(wvfs)
 
-    # t0 determination
-    # filter with fast asymetric trapezoidal filter and truncate waveform
-    uflt_asy_t0 = TrapezoidalChargeFilter(40u"ns", 100u"ns", 2000u"ns")
-    uflt_trunc_t0 = TruncateFilter(0u"µs"..60u"µs")
-
-    # eventuell zwei schritte!!!
-    wvfs_flt_asy_t0 = uflt_asy_t0.(uflt_trunc_t0.(wvfs_pz))
-
-    # get intersect at t0 threshold (fixed as in MJD analysis)
-    flt_intersec_t0 = Intersect(mintot = 600u"ns")
-
-    # get t0 for every waveform as pick-off at fixed threshold
-    t0 = uconvert.(u"µs", flt_intersec_t0.(wvfs_flt_asy_t0, t0_threshold).x)
-
     # truncate waveform for ENC filtering
     uflt_trunc_enc = TruncateFilter(0u"µs"..40u"µs")
     wvfs_pz_trunc = uflt_trunc_enc.(wvfs_pz)
@@ -60,6 +46,96 @@ function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     return enc_trap_grid
 end
 export dsp_trap_rt_optimization
+
+
+"""
+    dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs", length::Quantity{T}=10.0u"µs") where T<:Real
+
+Get ENC noise grid values for given CUSP grid rise times.
+
+Returns:
+    - `enc_cusp_grid`: Array ENC noise values for the given CUSP rise time grid
+"""
+function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs", flt_length::Quantity{T}=10.0u"µs") where T<:Real
+    # get config parameters
+    bl_mean_min, bl_mean_max    = config.bl_mean
+    e_grid_rt_cusp              = config.e_grid_rt_cusp
+    enc_pickoff_cusp            = config.enc_pickoff_cusp
+    cusp_scale                  = ustrip(NoUnits, flt_length/step(wvfs[1].time))
+
+    # get baseline mean, std and slope
+    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+
+    # substract baseline from waveforms
+    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+
+    # # truncate waveform for ENC filtering
+    uflt_trunc_enc = TruncateFilter(0u"µs"..40u"µs")
+    wvfs_trunc = uflt_trunc_enc.(wvfs)
+
+    # get energy grid for efficient optimization
+    enc_cusp_grid = zeros(Float64, length(collect(e_grid_rt_cusp)), length(wvfs))
+    for (r, rt) in enumerate(e_grid_rt_cusp)
+        if rt < ft
+            continue
+        end
+        uflt_rtft      = CUSPChargeFilter(rt, ft, τ, flt_length, cusp_scale)
+        
+        wvfs_flt_rtft  = uflt_rtft.(wvfs)
+
+        enc_rtft       = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, enc_pickoff_cusp)
+
+        enc_cusp_grid[r, :]   = enc_rtft
+    end
+
+    return enc_cusp_grid
+end
+export dsp_cusp_rt_optimization
+
+
+"""
+    dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs", length::Quantity{T}=10.0u"µs") where T<:Real
+
+Get ENC noise grid values for given ZAC grid rise times.
+
+Returns:
+    - `enc_zac_grid`: Array ENC noise values for the given ZAC rise time grid
+"""
+function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs", flt_length::Quantity{T}=10.0u"µs") where T<:Real
+    # get config parameters
+    bl_mean_min, bl_mean_max    = config.bl_mean
+    e_grid_rt_zac               = config.e_grid_rt_zac
+    enc_pickoff_zac             = config.enc_pickoff_zac
+    zac_scale                   = ustrip(NoUnits, flt_length/step(wvfs[1].time))
+
+    # get baseline mean, std and slope
+    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+
+    # substract baseline from waveforms
+    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+
+    # truncate waveform for ENC filtering
+    uflt_trunc_enc = TruncateFilter(0u"µs"..40u"µs")
+    wvfs_trunc = uflt_trunc_enc.(wvfs)
+
+    # get energy grid for efficient optimization
+    enc_zac_grid = zeros(Float64, length(e_grid_rt_zac), length(wvfs))
+    for (r, rt) in enumerate(e_grid_rt_zac)
+        if rt < ft
+            continue
+        end
+        uflt_rtft      = ZACChargeFilter(rt, ft, τ, flt_length, zac_scale)
+        
+        wvfs_flt_rtft  = uflt_rtft.(wvfs_trunc)
+
+        enc_rtft       = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, enc_pickoff_zac)
+
+        enc_zac_grid[r, :]   = enc_rtft
+    end
+
+    return enc_zac_grid
+end
+export dsp_zac_rt_optimization
 
 
 """
@@ -119,6 +195,124 @@ function dsp_trap_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     return e_grid
 end
 export dsp_trap_ft_optimization
+
+
+"""
+    dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T},; flt_length::Quantity{T}=10.0u"µs") where T<:Real
+
+Get energy grid values for given CUSP grid rise times while varying the flat-top time.
+
+Returns:
+    - `e_grid`: Array energy values for the given CUSP rise time grid at a given flat-top time grid.
+"""
+function dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T},; flt_length::Quantity{T}=10.0u"µs") where T<:Real
+    # get config parameters
+    bl_mean_min, bl_mean_max    = config.bl_mean
+    e_grid_ft_cusp              = config.e_grid_ft_cusp
+    t0_threshold                = config.t0_threshold
+    cusp_scale                  = ustrip(NoUnits, flt_length/step(wvfs[1].time))
+
+    # get baseline mean, std and slope
+    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+
+    # substract baseline from waveforms
+    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+
+    # deconvolute waveform
+    deconv_flt = InvCRFilter(τ)
+    wvfs_pz = deconv_flt.(wvfs)
+
+    # t0 determination
+    # filter with fast asymetric trapezoidal filter and truncate waveform
+    uflt_asy_t0 = TrapezoidalChargeFilter(40u"ns", 100u"ns", 2000u"ns")
+    uflt_trunc_t0 = TruncateFilter(0u"µs"..60u"µs")
+
+    # eventuell zwei schritte!!!
+    wvfs_flt_asy_t0 = uflt_asy_t0.(uflt_trunc_t0.(wvfs_pz))
+
+    # get intersect at t0 threshold (fixed as in MJD analysis)
+    flt_intersec_t0 = Intersect(mintot = 600u"ns")
+
+    # get t0 for every waveform as pick-off at fixed threshold
+    t0 = uconvert.(u"µs", flt_intersec_t0.(wvfs_flt_asy_t0, t0_threshold).x)
+
+    # get energy grid for efficient optimization
+    e_grid   = Array{Union{Missing, Float32}}(missing, length(e_grid_ft_cusp), length(wvfs))
+    for (f, ft) in enumerate(e_grid_ft_cusp)
+        if rt < ft
+            continue
+        end
+        uflt_rtft      = CUSPChargeFilter(rt, ft, τ, flt_length, cusp_scale)
+        
+        wvfs_flt_rtft  = uflt_rtft.(wvfs)
+
+        e_rtft         = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, t0 .+ flt_length/2 .+ ft/4)
+
+        e_grid[f, :]     = e_rtft
+    end
+
+    return e_grid
+end
+export dsp_cusp_ft_optimization
+
+
+"""
+    dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T},; flt_length::Quantity{T}=10.0u"µs") where T<:Real
+
+Get energy grid values for given ZAC grid rise times while varying the flat-top time.
+
+Returns:
+    - `e_grid`: Array energy values for the given ZAC rise time grid at a given flat-top time grid.
+"""
+function dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T},; flt_length::Quantity{T}=10.0u"µs") where T<:Real
+    # get config parameters
+    bl_mean_min, bl_mean_max    = config.bl_mean
+    e_grid_ft_zac               = config.e_grid_ft_zac
+    t0_threshold                = config.t0_threshold
+    zac_scale                   = ustrip(NoUnits, flt_length/step(wvfs[1].time))
+
+    # get baseline mean, std and slope
+    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+
+    # substract baseline from waveforms
+    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+
+    # deconvolute waveform
+    deconv_flt = InvCRFilter(τ)
+    wvfs_pz = deconv_flt.(wvfs)
+
+    # t0 determination
+    # filter with fast asymetric trapezoidal filter and truncate waveform
+    uflt_asy_t0 = TrapezoidalChargeFilter(40u"ns", 100u"ns", 2000u"ns")
+    uflt_trunc_t0 = TruncateFilter(0u"µs"..60u"µs")
+
+    # eventuell zwei schritte!!!
+    wvfs_flt_asy_t0 = uflt_asy_t0.(uflt_trunc_t0.(wvfs_pz))
+
+    # get intersect at t0 threshold (fixed as in MJD analysis)
+    flt_intersec_t0 = Intersect(mintot = 600u"ns")
+
+    # get t0 for every waveform as pick-off at fixed threshold
+    t0 = uconvert.(u"µs", flt_intersec_t0.(wvfs_flt_asy_t0, t0_threshold).x)
+
+    # get energy grid for efficient optimization
+    e_grid   = Array{Union{Missing, Float32}}(missing, length(e_grid_ft_zac), length(wvfs))
+    for (f, ft) in enumerate(e_grid_ft_zac)
+        if rt < ft
+            continue
+        end
+        uflt_rtft      = ZACChargeFilter(rt, ft, τ, flt_length, zac_scale)
+        
+        wvfs_flt_rtft  = uflt_rtft.(wvfs)
+
+        e_rtft         = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, t0 .+ flt_length/2 .+ ft/4)
+
+        e_grid[f, :]     = e_rtft
+    end
+
+    return e_grid
+end
+export dsp_zac_ft_optimization
 
 
 """ 
