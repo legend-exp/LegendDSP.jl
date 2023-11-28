@@ -19,6 +19,9 @@ function create_dsp_config(dsp_metadata::PropDicts.PropDict)
         dsp_metadata.enc_pickoff_trap*u"µs",
         dsp_metadata.enc_pickoff_zac*u"µs",
         dsp_metadata.enc_pickoff_cusp*u"µs",
+        # filter lengths for CUSP and ZAC filters
+        dsp_metadata.flt_length_cusp*u"µs",
+        dsp_metadata.flt_length_zac*u"µs",
         # in-trace pile-up rejector threshold in sigmas
         dsp_metadata.inTraceCut_std_threshold,
         # fit window for basline extraction
