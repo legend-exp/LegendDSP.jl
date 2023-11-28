@@ -37,5 +37,6 @@ include("saturation.jl")
 include("interpolation.jl")
 include("intersect_maximum.jl")
 include("dsp_sipm.jl")
+include("dsp_routines.jl")
 
 end # module
