@@ -1,4 +1,29 @@
+# This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
+"""
+    dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict)
+
+DSP routine for SiPM data. It needs the threshold parameters from the threshold scan for the given SiPM channel as well as the discharge threshold parameters.
+
+# Input data
+The input data is a table with the following columns:
+- `waveform`: waveform data
+- `baseline`: baseline data
+- `timestamp`: timestamp data
+- `eventnumber`: event number data
+- `daqenergy`: energy data
+
+# Output data
+The output data is a table with the following columns:
+- `blfc`: baseline from FADC
+- `timestamp`: timestamp
+- `eventID_fadc`: event number from FADC
+- `e_fc`: energy from FADC
+- `trig_pos`: trigger positions from DSP
+- `trig_max`: trigger maxima from DSP
+- `trig_pos_DC`: trigger positions of discharges
+- `trig_max_DC`: trigger maxima of discharges
+"""
 function dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict) where {Q <: Table}
     # get dsp meta parameters
     MINTOT_INTERSECT     = config.min_tot*u"ns"
