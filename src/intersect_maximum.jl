@@ -1,4 +1,5 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
+
 """
     struct IntersectMaximum <: Function
 Finds the intersects of a Y with a threshold and picking the maximum in a given time window.

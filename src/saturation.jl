@@ -1,6 +1,5 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
-
 """
     tailstats(signal::AbstractSamples, start::Real, stop::Real)
     tailstats(signal::RDWaveform, start::RealQuantity, stop::RealQuantity)
