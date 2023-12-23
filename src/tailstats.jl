@@ -4,7 +4,7 @@
     tailstats(signal::AbstractSamples, start::Real, stop::Real)
     tailstats(signal::RDWaveform, start::RealQuantity, stop::RealQuantity)
 
-Get statistics on the logarhithmic of the tail of a `signal` in the interval (`start`,`stop`).
+Get statistics on the logarhithmic of the tail of a `signal` in the interval (`start`,`stop`) by fitting a linear function.
 """
 function tailstats end
 export tailstats
