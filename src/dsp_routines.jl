@@ -1,3 +1,5 @@
+# This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
+
 """
     get_t0(wvfs_pz::ArrayOfRDWaveforms, t0_threshold::T) where T<:Real
 
@@ -31,4 +33,17 @@ function get_t50(wvfs_pz::ArrayOfRDWaveforms, wvf_max::Array{T}) where T<:Real
 
     # get t50 for every waveform as pick-off at fixed threshold
     uconvert.(u"µs", flt_intersect.(wvfs_pz, wvf_max .* 0.5).x)
+end
+
+"""
+    get_t80(wvfs_pz::ArrayOfRDWaveforms, wvf_max::T) where T<:Real
+
+Get t80 for each waveform in `wvfs_pz` by intersecting the waveform with a fixed threshold at `wvf_max * 0.8`.
+"""
+function get_t80(wvfs_pz::ArrayOfRDWaveforms, wvf_max::Array{T}) where T<:Real
+    # create intersect filter
+    flt_intersect = Intersect(mintot = 1000u"ns")
+
+    # get t50 for every waveform as pick-off at fixed threshold
+    uconvert.(u"µs", flt_intersect.(wvfs_pz, wvf_max .* 0.8).x)
 end
