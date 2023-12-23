@@ -29,14 +29,14 @@ import Adapt
 include("tailstats.jl")
 include("utils.jl")
 include("types.jl")
-include("math.jl")
-include("decaytime.jl")
-include("filter_optimization.jl")
+include("dsp_decaytime.jl")
+include("dsp_filter_optimization.jl")
 include("dsp_icpc.jl")
 include("saturation.jl")
 include("interpolation.jl")
 include("intersect_maximum.jl")
 include("dsp_sipm.jl")
 include("dsp_routines.jl")
+include("dsp_puls.jl")
 
 end # module

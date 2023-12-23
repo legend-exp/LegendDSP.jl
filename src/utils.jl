@@ -1,3 +1,5 @@
+# This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
+
 """
     create_dsp_config(dsp_metadata::PropDicts.PropDict)
 
