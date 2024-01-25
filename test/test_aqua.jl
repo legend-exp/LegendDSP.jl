@@ -7,6 +7,6 @@ import LegendDSP
 Test.@testset "Aqua tests" begin
     Aqua.test_all(
         LegendDSP,
-        ambiguities = false        
+        ambiguities = false
     )
 end # testset
