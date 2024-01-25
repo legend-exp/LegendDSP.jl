@@ -1,3 +1,5 @@
+# This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
+
 const MaybeWithUnits{T<:Number} = Union{T,Quantity{<:T}}
 const RealQuantity = MaybeWithUnits{<:Real}
 
@@ -39,6 +41,10 @@ struct DSPConfig{T <: Real}
     enc_pickoff_trap::Quantity{<:T}
     enc_pickoff_zac::Quantity{<:T}
     enc_pickoff_cusp::Quantity{<:T}
+
+    # filter lengths for CUSP and ZAC filters
+    flt_length_cusp::Quantity{<:T}
+    flt_length_zac::Quantity{<:T}
 
     # in-trace pile-up rejector threshold in standard deviations
     inTraceCut_std_threshold::T

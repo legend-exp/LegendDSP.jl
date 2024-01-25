@@ -1,7 +1,11 @@
+# This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
+
 """
     dsp_decay_times(wvfs::AbstractSamples, start::Real, stop::Real)
 
 Get statistics on the logarhithmic of the tail of the `wvfs` in the interval (`start`,`stop`).
+# Returns
+- `τ`: decay time in µs
 """
 function dsp_decay_times(wvfs::ArrayOfRDWaveforms, config::DSPConfig)
     # get config parameters
