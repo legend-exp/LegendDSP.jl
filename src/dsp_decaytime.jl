@@ -7,10 +7,10 @@ Get statistics on the logarhithmic of the tail of the `wvfs` in the interval (`s
 # Returns
 - `τ`: decay time in µs
 """
-function dsp_decay_times(wvfs::ArrayOfRDWaveforms, config::DSPConfig)
+function dsp_decay_times(wvfs::ArrayOfRDWaveforms, bl_mean::Tuple, pz_fit::Tuple)
     # get config parameters
-    bl_mean_min, bl_mean_max    = config.bl_mean
-    pz_fit_min, pz_fit_max      = config.pz_fit
+    bl_mean_min, bl_mean_max    = bl_mean
+    pz_fit_min, pz_fit_max      = pz_fit
 
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
@@ -23,5 +23,9 @@ function dsp_decay_times(wvfs::ArrayOfRDWaveforms, config::DSPConfig)
     
     # return converted to µs vals
     return uconvert.(u"µs", decay_times.τ)
+end
+
+function dsp_decay_times(wvfs::ArrayOfRDWaveforms, config::DSPConfig)
+    dsp_decay_times(wvfs, config.bl_mean, config.pz_fit)
 end
 export dsp_decay_times
