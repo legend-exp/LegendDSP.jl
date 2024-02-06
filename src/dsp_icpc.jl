@@ -61,9 +61,9 @@ The output data is a table with the following columns:
 """
 function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
     # get config parameters
-    bl_mean_min, bl_mean_max    = config.bl_mean
+    bl_window                   = config.bl_window
     t0_threshold                = config.t0_threshold
-    pz_fit_min, pz_fit_max      = config.pz_fit
+    tail_window                 = config.tail_window
     inTraceCut_std_threshold    = config.inTraceCut_std_threshold
     
     # get optimal filter parameters
@@ -98,7 +98,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     τ_zac = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
     # pretrace difference 
     pretrace_diff = flatview(wvfs.signal)[1, :] - bl_stats.mean
@@ -111,7 +111,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     wvf_min = minimum.(wvfs.signal)
 
     # extract decay times
-    tail_stats = tailstats.(wvfs, pz_fit_min, pz_fit_max)
+    tail_stats = tailstats.(wvfs, first(tail_window), last(tail_window))
 
     # deconvolute waveform 
     # --> wvfs = wvfs_pz
@@ -174,7 +174,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     current_max = get_wvf_maximum.(wvfs_sgflt_deriv, first(current_window), last(current_window))
 
     # get in-trace pile-up
-    inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_mean_min, bl_mean_max)
+    inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window)
     
     # get position of current rise
     t50_current = get_threshold(wvfs_sgflt_deriv, maximum.(wvfs_sgflt_deriv.signal) .* 0.5; mintot=300u"ns")

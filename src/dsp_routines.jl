@@ -70,10 +70,10 @@ export get_qdrift
 
 Get position and multiplicity of in-trace pile-up as intersect of reversed derivative signal with threshold as multiple of std. The `wvfs` have to be a current signal.
 """
-function get_intracePileUp(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, blmin::Unitful.Time{<:Real}, blmax::Unitful.Time{<:Real}; mintot::Unitful.Time=100.0u"ns")
+function get_intracePileUp(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
     # get position and multiplicity of in-trace pile-up as intersect of reversed derivative signal with threshold as multiple of std
     flt_intersec_inTrace = Intersect(mintot = mintot)
-    inTrace_pileUp       = flt_intersec_inTrace.(reverse_waveform.(wvfs), signalstats.(wvfs, blmin + first(wvfs[1].time), blmax).sigma .* sigma_threshold)
+    inTrace_pileUp       = flt_intersec_inTrace.(reverse_waveform.(wvfs), signalstats.(wvfs, first(bl_window) + first(wvfs[1].time), last(bl_window)).sigma .* sigma_threshold)
     # return intersect position measured from the non-reversed waveform and multiplicity
     (intersect = last(wvfs[1].time) .- inTrace_pileUp.x, n = inTrace_pileUp.multiplicity)
 end
