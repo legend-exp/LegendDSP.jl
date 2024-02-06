@@ -11,8 +11,9 @@ Configuration parameters for DSP algorithms.
 
 # Fields
 - `enc_pickoff::Quantity{<:T}`: pick-off time for ENC noise calculations
-- `bl_mean::NTuple{2, Quantity{<:T}}`: fit window for basline extraction
-- `pz_fit::NTuple{2, Quantity{<:T}}`: fit window for decay time extraction
+- `bl_window::ClosedInterval{Quantity{<:T}}`: fit window for basline extraction
+- `tail_window::ClosedInterval{Quantity{<:T}}`: fit window for decay time extraction
+- `inTraceCut_std_threshold::T`: in-trace pile-up rejector threshold in standard deviations
 - `t0_threshold::T`: ADC threshold for t0 determination
 - `e_grid_rt_trap::StepRangeLen{Quantity{<:T}}`: rise time grid scan range for trapezoidal filter
 - `e_grid_ft_trap::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for trapezoidal filter
@@ -20,20 +21,16 @@ Configuration parameters for DSP algorithms.
 - `e_grid_ft_zac::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for ZAC filter
 - `e_grid_rt_cusp::StepRangeLen{Quantity{<:T}}`: rise time grid scan range for CUSP filter
 - `e_grid_ft_cusp::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for CUSP filter
-- `e_grid_rt_sg::StepRangeLen{Quantity{<:T}}`: window length grid scan range for SG filter
+- `a_grid_rt_sg::StepRangeLen{Quantity{<:T}}`: window length grid scan range for SG filter
 
 # Examples
 ```julia
 using LegendDSP
-using Unitful
+using LegendDataManagement
 
-dsp_config = DSPConfig{Float64}(32.0u"µs", 
-(0.0u"µs", 39.0u"µs"), 
-(80.0u"µs", 110.0u"µs"), 
-5.0, 
-7.0u"µs":0.5u"µs":12.0u"µs", 1.0u"µs":0.2u"µs":4.0u"µs",
-7.0u"µs":0.5u"µs":12.0u"µs", 1.0u"µs":0.2u"µs":4.0u"µs", 
-7.0u"µs":0.5u"µs":12.0u"µs", 1.0u"µs":0.2u"µs":4.0u"µs")
+l200 = LegendData(:l200)
+filekey = start_filekey(l200, (:p03, :r000, :cal))
+dsp_config = DSPConfig(dataprod_config(l200).dsp(filekey).default)
 ```
 """
 struct DSPConfig{T <: Real}
@@ -50,10 +47,10 @@ struct DSPConfig{T <: Real}
     inTraceCut_std_threshold::T
 
     # fit window for basline extraction
-    bl_mean::NTuple{2, Quantity{<:T}}
+    bl_window::ClosedInterval{<:Quantity{<:T}}
 
     # fit window for decay time extraction
-    pz_fit::NTuple{2, Quantity{<:T}}
+    tail_window::ClosedInterval{<:Quantity{<:T}}
 
     # ADC threshold for t0 determination
     t0_threshold::T
@@ -75,5 +72,9 @@ struct DSPConfig{T <: Real}
 end
 export DSPConfig
 
+
+function DSPConfig(pd::PropDict)
+    _create_dsp_config(pd)
+end
 
 
