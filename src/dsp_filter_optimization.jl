@@ -10,12 +10,12 @@ Get ENC noise grid values for given trap grid rise times.
 """
 function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
     # get config parameters
-    bl_mean_min, bl_mean_max    = config.bl_mean
+    bl_window                   = config.bl_window
     e_grid_rt_trap              = config.e_grid_rt_trap
     enc_pickoff_trap            = config.enc_pickoff_trap
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
@@ -54,7 +54,7 @@ Get ENC noise grid values for given CUSP grid rise times.
 """
 function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
     # get config parameters
-    bl_mean_min, bl_mean_max    = config.bl_mean
+    bl_window                   = config.bl_window
     e_grid_rt_cusp              = config.e_grid_rt_cusp
     enc_pickoff_cusp            = config.enc_pickoff_cusp
     flt_length_cusp             = config.flt_length_cusp
@@ -64,7 +64,7 @@ function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     τ_cusp = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
@@ -107,7 +107,7 @@ Get ENC noise grid values for given ZAC grid rise times.
 """
 function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
     # get config parameters
-    bl_mean_min, bl_mean_max    = config.bl_mean
+    bl_window                   = config.bl_window
     e_grid_rt_zac               = config.e_grid_rt_zac
     enc_pickoff_zac             = config.enc_pickoff_zac
     flt_length_zac              = config.flt_length_zac
@@ -117,7 +117,7 @@ function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
     τ_zac = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
@@ -160,11 +160,11 @@ Get energy grid values for given trap grid rise times while varying the flat-top
 """
 function dsp_trap_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T}) where T<:Real
     # get config parameters
-    bl_mean_min, bl_mean_max    = config.bl_mean
+    bl_window                   = config.bl_window
     e_grid_ft_trap              = config.e_grid_ft_trap
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
@@ -207,7 +207,7 @@ Get energy grid values for given CUSP grid rise times while varying the flat-top
 """
 function dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T}) where T<:Real
     # get config parameters
-    bl_mean_min, bl_mean_max    = config.bl_mean
+    bl_window                   = config.bl_window
     e_grid_ft_cusp              = config.e_grid_ft_cusp
     flt_length_cusp             = config.flt_length_cusp
     cusp_scale                  = ustrip(NoUnits, flt_length_cusp/step(wvfs[1].time))
@@ -216,7 +216,7 @@ function dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     τ_cusp = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
@@ -259,7 +259,7 @@ Returns:
 """
 function dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T}) where T<:Real
     # get config parameters
-    bl_mean_min, bl_mean_max    = config.bl_mean
+    bl_window                   = config.bl_window
     e_grid_ft_zac               = config.e_grid_ft_zac
     flt_length_zac              = config.flt_length_zac
     zac_scale                   = ustrip(NoUnits, flt_length_zac/step(wvfs[1].time))
@@ -268,7 +268,7 @@ function dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
     τ_zac = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
@@ -314,7 +314,7 @@ Optimize the Savitzky-Golay filter parameters for a given waveform set.
 """
 function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where T<:Real
     # get config parameters
-    bl_mean_min, bl_mean_max    = config.bl_mean
+    bl_window                   = config.bl_window
     a_grid_wl_sg                = config.a_grid_wl_sg
 
     # get optimal filter parameters
@@ -322,7 +322,7 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     ft = pars_filter.trap.ft.val*u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)

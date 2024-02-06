@@ -18,7 +18,6 @@ Get the maximum of a `signal` in the interval (`start`,`stop`) by quadaratic int
 function get_wvf_maximum end
 export get_wvf_maximum
 
-
 function get_wvf_maximum(input::RadiationDetectorDSP.SamplesOrWaveform, start::RadiationDetectorDSP.RealQuantity, stop::RadiationDetectorDSP.RealQuantity)
     X_axis, Y = RadiationDetectorDSP._get_axis_and_signal(input)
     # ToDo: Lower numerical precision of x-axis to y-axis, if x-axis is a range

@@ -28,7 +28,7 @@ The output data is a table with the following columns:
 """
 function dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
     # get config parameters
-    bl_mean_min, bl_mean_max = config.bl_mean
+    bl_window = config.bl_window
 
     # get waveform data 
     wvfs = data.waveform
@@ -38,7 +38,7 @@ function dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
     efc  = data.daqenergy
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, bl_mean_min, bl_mean_max)
+    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
