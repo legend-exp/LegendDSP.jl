@@ -1,17 +1,14 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_decay_times(wvfs::AbstractSamples, config::DSPConfig)
-
+    dsp_decay_times(wvfs::ArrayOfRDWaveforms, bl_window::ClosedInterval{<:Unitful.Time{<:T}}, tail_window::ClosedInterval{<:Unitful.Time{<:T}})
+    dsp_decay_times(wvfs::ArrayOfRDWaveforms, config::DSPConfig)
+    
 Get statistics on the logarhithmic of the tail of the `wvfs` in the interval `tail_window`.
 # Returns
 - `τ`: decay time in µs
 """
-function dsp_decay_times(wvfs::ArrayOfRDWaveforms, config::DSPConfig)
-    # get config parameters
-    bl_window    = config.bl_window
-    tail_window  = config.tail_window
-
+function dsp_decay_times(wvfs::ArrayOfRDWaveforms, bl_window::ClosedInterval{<:Unitful.Time{<:T}}, tail_window::ClosedInterval{<:Unitful.Time{<:T}}) where T <: Real
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
 
@@ -25,3 +22,5 @@ function dsp_decay_times(wvfs::ArrayOfRDWaveforms, config::DSPConfig)
     return uconvert.(u"µs", decay_times.τ)
 end
 export dsp_decay_times
+
+dsp_decay_times(wvfs::ArrayOfRDWaveforms, config::DSPConfig) = dsp_decay_times(wvfs, config.bl_window, config.tail_window)
