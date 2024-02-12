@@ -98,7 +98,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     τ_zac = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # pretrace difference 
     pretrace_diff = flatview(wvfs.signal)[1, :] - bl_stats.mean
@@ -111,7 +111,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     wvf_min = minimum.(wvfs.signal)
 
     # extract decay times
-    tail_stats = tailstats.(wvfs, first(tail_window), last(tail_window))
+    tail_stats = tailstats.(wvfs, leftendpoint(tail_window), rightendpoint(tail_window))
 
     # deconvolute waveform 
     # --> wvfs = wvfs_pz
@@ -171,7 +171,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, 2, 1).(wvfs)
 
     current_window = (20.0:100.0)u"µs"
-    current_max = get_wvf_maximum.(wvfs_sgflt_deriv, first(current_window), last(current_window))
+    current_max = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(current_window), rightendpoint(current_window))
 
     # get in-trace pile-up
     inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window)
