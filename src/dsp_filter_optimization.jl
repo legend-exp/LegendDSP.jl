@@ -325,7 +325,7 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     e_rtft = SignalEstimator(PolynomialDNI(4, 80u"ns")).(uflt_rtft.(wvfs), t50 .+ (rt + ft/2))
 
     # extract current with filter length in grid with second order polynominal and first derivative
-    aoe_grid   = ones(Float64, length(a_grid_wl_sg), length(wvf))
+    aoe_grid   = ones(Float64, length(a_grid_wl_sg), length(wvfs))
     for (w, wl) in enumerate(a_grid_wl_sg)
         sgflt_deriv = SavitzkyGolayFilter(wl, 2, 1)
         current_max = get_wvf_maximum.(sgflt_deriv.(wvfs), 20u"µs", 100u"µs")
