@@ -6,17 +6,16 @@
 Get t0 for each waveform in `wvfs_pz` by using a fast asymetric trapezoidal filter and
 a fixed threshold at `t0_threshold`. The filter is truncated to the range 0µs to 60µs where the Ge trigger is expected in FlashCam.
 """
-function get_t0(wvfs_pz::ArrayOfRDWaveforms, t0_threshold::T) where T<:Real
+function get_t0(wvfs_pz::ArrayOfRDWaveforms, t0_threshold::T; flt_pars::Vector{<:Unitful.Time{<:Real}}=[40u"ns", 100u"ns", 2000u"ns"], mintot::Unitful.Time{<:Real}=1500u"ns") where T<:Real
     # t0 determination
     # filter with fast asymetric trapezoidal filter and truncate waveform
-    uflt_asy_t0 = TrapezoidalChargeFilter(40u"ns", 100u"ns", 2000u"ns")
-    uflt_trunc_t0 = TruncateFilter(0u"µs"..60u"µs")
+    uflt_asy_t0 = TrapezoidalChargeFilter(flt_pars...)
 
     # eventuell zwei schritte!!!
-    wvfs_flt_asy_t0 = uflt_asy_t0.(uflt_trunc_t0.(wvfs_pz))
+    wvfs_flt_asy_t0 = uflt_asy_t0.(wvfs_pz)
 
     # get intersect at t0 threshold (fixed as in MJD analysis)
-    flt_intersec_t0 = Intersect(mintot = 1500u"ns")
+    flt_intersec_t0 = Intersect(mintot = mintot)
 
     # get t0 for every waveform as pick-off at fixed threshold
     t0 = uconvert.(u"µs", flt_intersec_t0.(wvfs_flt_asy_t0, t0_threshold).x)
@@ -70,10 +69,10 @@ export get_qdrift
 
 Get position and multiplicity of in-trace pile-up as intersect of reversed derivative signal with threshold as multiple of std. The `wvfs` have to be a current signal.
 """
-function get_intracePileUp(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
+function get_intracePileUp(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
     # get position and multiplicity of in-trace pile-up as intersect of reversed derivative signal with threshold as multiple of std
     flt_intersec_inTrace = Intersect(mintot = mintot)
-    inTrace_pileUp       = flt_intersec_inTrace.(reverse_waveform.(wvfs), signalstats.(wvfs, leftendpoint(bl_window) + leftendpoint(wvfs[1].time), rightendpoint(bl_window)).sigma .* sigma_threshold)
+    inTrace_pileUp       = flt_intersec_inTrace.(reverse_waveform.(wvfs), signalstats.(wvfs, leftendpoint(bl_window) + first(wvfs[1].time), rightendpoint(bl_window)).sigma .* sigma_threshold)
     # return intersect position measured from the non-reversed waveform and multiplicity
     (intersect = last(wvfs[1].time) .- inTrace_pileUp.x, n = inTrace_pileUp.multiplicity)
 end

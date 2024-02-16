@@ -43,8 +43,14 @@ struct DSPConfig{T <: Real}
     flt_length_cusp::Quantity{<:T}
     flt_length_zac::Quantity{<:T}
 
-    # in-trace pile-up rejector threshold in standard deviations
+    # ADC threshold for t0 determination
+    t0_threshold::T
+
+    # in-trace pile-up rejector threshold in sigmas
     inTraceCut_std_threshold::T
+
+    # Savitzky Golay polynominal order for current extraction
+    sg_flt_degree::Int
 
     # fit window for basline extraction
     bl_window::ClosedInterval{<:Quantity{<:T}}
@@ -52,8 +58,14 @@ struct DSPConfig{T <: Real}
     # fit window for decay time extraction
     tail_window::ClosedInterval{<:Quantity{<:T}}
 
-    # ADC threshold for t0 determination
-    t0_threshold::T
+    # fit window for current extraction
+    current_window::ClosedInterval{<:Quantity{<:T}}
+
+    # Integration length for QDrift extraction
+    qdrift_int_length::StepRangeLen{<:Quantity{<:T}}
+
+    # Integration length for LQ extraction
+    lq_int_length::StepRangeLen{<:Quantity{<:T}}
 
     # rise and flat-top time grid scan ranges for trapezoidal filter
     e_grid_rt_trap::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
@@ -69,6 +81,12 @@ struct DSPConfig{T <: Real}
     
     # window length grid scan range for SG filter in current determination
     a_grid_wl_sg::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
+
+    # default filter parameter
+    default_flt_param::PropDict
+
+    # additional pars
+    kwargs_pars::PropDict
 end
 export DSPConfig
 
