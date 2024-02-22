@@ -61,19 +61,20 @@ The output data is a table with the following columns:
 """
 function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
     # get config parameters
-    bl_window                   = config.bl_window
-    t0_threshold                = config.t0_threshold
-    tail_window                 = config.tail_window
-    inTraceCut_std_threshold    = config.inTraceCut_std_threshold
+    bl_window                         = config.bl_window
+    t0_threshold                   = config.t0_threshold
+    tail_window                = config.tail_window
+    inTraceCut_std_threshold       = config.inTraceCut_std_threshold
+    sg_flt_degree              = config.sg_flt_degree
+    current_window                    = config.current_window
+    qdrift_int_length                 = config.qdrift_int_length
+    lq_int_length                     = config.lq_int_length
     
     # get optimal filter parameters
-    trap_rt = pars_filter.trap.rt.val*u"µs"
-    trap_ft = pars_filter.trap.ft.val*u"µs"
-    cusp_rt = pars_filter.cusp.rt.val*u"µs"
-    cusp_ft = pars_filter.cusp.ft.val*u"µs"
-    zac_rt  = pars_filter.zac.rt.val*u"µs"
-    zac_ft  = pars_filter.zac.ft.val*u"µs"
-    sg_wl   = pars_filter.sg.wl.val*u"ns"
+    trap_rt, trap_ft = get_fltpars(pars_filter, :trap, config)
+    cusp_rt, cusp_ft = get_fltpars(pars_filter, :cusp, config)
+    zac_rt, zac_ft = get_fltpars(pars_filter, :zac, config)
+    sg_wl   = get_fltpars(pars_filter, :sg, config)
 
     # get waveform data 
     wvfs = data.waveform
@@ -89,7 +90,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     cusp_scale                  = ustrip(NoUnits, flt_length_cusp/step(wvfs[1].time))
 
     # get number of samples the waveform is saturated at low and high of FADC range
-    bit_depth = 16 # of FlashCam FADC
+    bit_depth = config.kwargs_pars.fc_bit_depth # of FlashCam FADC
     sat_low, sat_high = 0, 2^bit_depth - bit_depth
     sat_stats = saturation.(wvfs, sat_low, sat_high)
 
@@ -98,7 +99,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     τ_zac = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # pretrace difference 
     pretrace_diff = flatview(wvfs.signal)[1, :] - bl_stats.mean
@@ -111,7 +112,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     wvf_min = minimum.(wvfs.signal)
 
     # extract decay times
-    tail_stats = tailstats.(wvfs, first(tail_window), last(tail_window))
+    tail_stats = tailstats.(wvfs, leftendpoint(tail_window), rightendpoint(tail_window))
 
     # deconvolute waveform 
     # --> wvfs = wvfs_pz
@@ -119,25 +120,25 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     wvfs = deconv_flt.(wvfs)
 
     # get tail mean, std and slope
-    pz_stats = signalstats.(wvfs, pz_fit_min, pz_fit_max)
+    pz_stats = signalstats.(wvfs, leftendpoint(tail_window), rightendpoint(tail_window))
 
     # t0 determination
-    t0 = get_t0(wvfs, t0_threshold)
+    t0 = get_t0(wvfs, t0_threshold; flt_pars=config.kwargs_pars.t0_flt_pars, mintot=config.kwargs_pars.t0_mintot)
 
     # get threshold points in rise
-    t10 = get_threshold(wvfs, wvf_max .* 0.1)
-    t50 = get_threshold(wvfs, wvf_max .* 0.5)
-    t80 = get_threshold(wvfs, wvf_max .* 0.8)
-    t90 = get_threshold(wvfs, wvf_max .* 0.9)
-    t99 = get_threshold(wvfs, wvf_max .* 0.99)
+    t10 = get_threshold(wvfs, wvf_max .* 0.1; mintot=config.kwargs_pars.tx_mintot)
+    t50 = get_threshold(wvfs, wvf_max .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+    t80 = get_threshold(wvfs, wvf_max .* 0.8; mintot=config.kwargs_pars.tx_mintot)
+    t90 = get_threshold(wvfs, wvf_max .* 0.9; mintot=config.kwargs_pars.tx_mintot)
+    t99 = get_threshold(wvfs, wvf_max .* 0.99; mintot=config.kwargs_pars.tx_mintot)
     
     drift_time = uconvert.(u"ns", t90 - t0)
 
     # get Q-drift parameter
-    qdrift = get_qdrift(wvfs, t0, (2.5:5.0)u"µs")
+    qdrift = get_qdrift(wvfs, t0, qdrift_int_length; pol_power=config.kwargs_pars.sig_interpolation_order, sign_est_length=config.kwargs_pars.sig_interpolation_length)
 
     # get LQ parameter
-    lq  = get_qdrift(wvfs, t80, (2.5:5.0)u"µs")
+    lq  = get_qdrift(wvfs, t80, lq_int_length; pol_power=config.kwargs_pars.sig_interpolation_order, sign_est_length=config.kwargs_pars.sig_interpolation_length)
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
@@ -150,7 +151,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     e_313  = maximum.((uflt_313.(wvfs)).signal)
 
     # signal estimator for precise energy reconstruction
-    signal_estimator = SignalEstimator(PolynomialDNI(3, 100u"ns"))
+    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
 
     # get trap energy of optimized rise and flat-top time
     uflt_trap_rtft = TrapezoidalChargeFilter(trap_rt, trap_ft)
@@ -168,16 +169,14 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     e_zac = signal_estimator.(uflt_zac_rtft.(wvfs), t50 .+ (flt_length_zac /2))
 
     # extract current with optimal SG filter length with second order polynominal and first derivative
-    wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, 2, 1).(wvfs)
-
-    current_window = (20.0:100.0)u"µs"
-    current_max = get_wvf_maximum.(wvfs_sgflt_deriv, first(current_window), last(current_window))
+    wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs)
+    current_max = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(current_window), rightendpoint(current_window))
 
     # get in-trace pile-up
-    inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window)
+    inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
     
     # get position of current rise
-    t50_current = get_threshold(wvfs_sgflt_deriv, maximum.(wvfs_sgflt_deriv.signal) .* 0.5; mintot=300u"ns")
+    t50_current = get_threshold(wvfs_sgflt_deriv, maximum.(wvfs_sgflt_deriv.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
 
     # invert waveform for DC tagging
     # wvfs --> wvfs_pz_inv
@@ -189,7 +188,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     e_313_max_inv  = maximum.(uflt_313.(wvfs).signal)
 
     # t0 determination
-    t0_inv = get_t0(wvfs, t0_threshold)
+    t0_inv = get_t0(wvfs, t0_threshold; mintot=config.kwargs_pars.t0_mintot)
 
     # output Table 
     return TypedTables.Table(blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 

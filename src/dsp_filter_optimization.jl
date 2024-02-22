@@ -15,26 +15,24 @@ function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     enc_pickoff_trap            = config.enc_pickoff_trap
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
-    wvfs_pz = deconv_flt.(wvfs)
+    wvfs = deconv_flt.(wvfs)
 
     # get energy grid for efficient optimization
-    enc_trap_grid = zeros(Float64, length(e_grid_rt_trap), length(wvfs_pz))
+    enc_trap_grid = zeros(Float64, length(e_grid_rt_trap), length(wvfs))
     for (r, rt) in enumerate(e_grid_rt_trap)
         if rt < ft
             continue
         end
         uflt_rtft      = TrapezoidalChargeFilter(rt, ft)
         
-        wvfs_flt_rtft  = uflt_rtft.(wvfs_pz)
-
-        enc_rtft       = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, enc_pickoff_trap)
+        enc_rtft       = SignalEstimator(PolynomialDNI(4, 80u"ns")).(uflt_rtft.(wvfs), enc_pickoff_trap)
 
         enc_trap_grid[r, :]   = enc_rtft
     end
@@ -64,7 +62,7 @@ function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     τ_cusp = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
@@ -75,7 +73,7 @@ function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
-    wvfs_pz = deconv_flt.(wvfs)
+    wvfs = deconv_flt.(wvfs)
 
     # get energy grid for efficient optimization
     enc_cusp_grid = zeros(Float64, length(collect(e_grid_rt_cusp)), length(wvfs))
@@ -85,9 +83,7 @@ function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
         end
         uflt_rtft      = CUSPChargeFilter(rt, ft, τ_cusp, flt_length_cusp, cusp_scale)
         
-        wvfs_flt_rtft  = uflt_rtft.(wvfs_pz)
-
-        enc_rtft       = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, enc_pickoff_cusp)
+        enc_rtft       = SignalEstimator(PolynomialDNI(4, 80u"ns")).(uflt_rtft.(wvfs), enc_pickoff_cusp)
 
         enc_cusp_grid[r, :]   = enc_rtft
     end
@@ -117,7 +113,7 @@ function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
     τ_zac = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
@@ -128,7 +124,7 @@ function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
-    wvfs_pz = deconv_flt.(wvfs)
+    wvfs = deconv_flt.(wvfs)
 
     # get energy grid for efficient optimization
     enc_zac_grid = zeros(Float64, length(e_grid_rt_zac), length(wvfs))
@@ -138,9 +134,7 @@ function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
         end
         uflt_rtft      = ZACChargeFilter(rt, ft, τ_zac, flt_length_zac, zac_scale)
         
-        wvfs_flt_rtft  = uflt_rtft.(wvfs_pz)
-
-        enc_rtft       = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, enc_pickoff_zac)
+        enc_rtft       = SignalEstimator(PolynomialDNI(4, 80u"ns")).(uflt_rtft.(wvfs), enc_pickoff_zac)
 
         enc_zac_grid[r, :]   = enc_rtft
     end
@@ -164,30 +158,28 @@ function dsp_trap_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     e_grid_ft_trap              = config.e_grid_ft_trap
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
-    wvfs_pz = deconv_flt.(wvfs)
+    wvfs = deconv_flt.(wvfs)
 
     # t50 determination
-    wvf_max = maximum.(wvfs.signal)
-    t50 = get_t50(wvfs_pz, wvf_max)
+    t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5)
+
 
     # get energy grid for efficient optimization
-    e_grid   = Array{Union{Missing, Float32}}(missing, length(e_grid_ft_trap), length(wvfs_pz))
+    e_grid   = Array{Union{Missing, Float32}}(missing, length(e_grid_ft_trap), length(wvfs))
     for (f, ft) in enumerate(e_grid_ft_trap)
         if rt < ft
             continue
         end
         uflt_rtft      = TrapezoidalChargeFilter(rt, ft)
         
-        wvfs_flt_rtft  = uflt_rtft.(wvfs_pz)
-
-        e_rtft         = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, t50 .+ (rt + ft/2))
+        e_rtft         = SignalEstimator(PolynomialDNI(4, 80u"ns")).(uflt_rtft.(wvfs), t50 .+ (rt + ft/2))
 
         e_grid[f, :]     = e_rtft
     end
@@ -216,18 +208,17 @@ function dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     τ_cusp = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
-    wvfs_pz = deconv_flt.(wvfs)
+    wvfs = deconv_flt.(wvfs)
 
     # t50 determination
-    wvf_max = maximum.(wvfs.signal)
-    t50 = get_t50(wvfs_pz, wvf_max)
+    t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5)
 
     # get energy grid for efficient optimization
     e_grid   = Array{Union{Missing, Float32}}(missing, length(e_grid_ft_cusp), length(wvfs))
@@ -237,9 +228,7 @@ function dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
         end
         uflt_rtft      = CUSPChargeFilter(rt, ft, τ_cusp, flt_length_cusp, cusp_scale)
         
-        wvfs_flt_rtft  = uflt_rtft.(wvfs_pz)
-
-        e_rtft         = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, t50 .+ flt_length_cusp/2)
+        e_rtft         = SignalEstimator(PolynomialDNI(4, 80u"ns")).(uflt_rtft.(wvfs), t50 .+ flt_length_cusp/2)
 
         e_grid[f, :]     = e_rtft
     end
@@ -268,18 +257,17 @@ function dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
     τ_zac = 10000000.0u"µs"
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
-    wvfs_pz = deconv_flt.(wvfs)
+    wvfs = deconv_flt.(wvfs)
 
     # t50 determination
-    wvf_max = maximum.(wvfs.signal)
-    t50 = get_t50(wvfs_pz, wvf_max)
+    t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5)
 
     # get energy grid for efficient optimization
     e_grid   = Array{Union{Missing, Float32}}(missing, length(e_grid_ft_zac), length(wvfs))
@@ -289,9 +277,7 @@ function dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
         end
         uflt_rtft      = ZACChargeFilter(rt, ft, τ_zac, flt_length_zac, zac_scale)
         
-        wvfs_flt_rtft  = uflt_rtft.(wvfs_pz)
-
-        e_rtft         = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, t50 .+ flt_length_zac/2)
+        e_rtft         = SignalEstimator(PolynomialDNI(4, 80u"ns")).(uflt_rtft.(wvfs), t50 .+ flt_length_zac/2)
 
         e_grid[f, :]     = e_rtft
     end
@@ -314,38 +300,35 @@ Optimize the Savitzky-Golay filter parameters for a given waveform set.
 """
 function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where T<:Real
     # get config parameters
-    bl_window                   = config.bl_window
-    a_grid_wl_sg                = config.a_grid_wl_sg
+    bl_window    = config.bl_window
+    a_grid_wl_sg = config.a_grid_wl_sg
 
     # get optimal filter parameters
-    rt = pars_filter.trap.rt.val*u"µs"
-    ft = pars_filter.trap.ft.val*u"µs"
+    rt = pars_filter.trap.rt
+    ft = pars_filter.trap.ft
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
-    wvfs_pz = deconv_flt.(wvfs)
+    wvfs = deconv_flt.(wvfs)
     
     # t50 determination
-    wvf_max = maximum.(wvfs.signal)
-    t50 = get_t50(wvfs_pz, wvf_max)
+    t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5)
 
     # get energy for filter parameters
     uflt_rtft      = TrapezoidalChargeFilter(rt, ft)
-    wvfs_flt_rtft  = uflt_rtft.(wvfs_pz)
-    e_rtft = SignalEstimator(PolynomialDNI(4, 80u"ns")).(wvfs_flt_rtft, t50 .+ (rt + ft/2))
+    e_rtft = SignalEstimator(PolynomialDNI(4, 80u"ns")).(uflt_rtft.(wvfs), t50 .+ (rt + ft/2))
 
     # extract current with filter length in grid with second order polynominal and first derivative
-    aoe_grid   = ones(Float64, length(a_grid_wl_sg), length(wvfs_pz))
+    aoe_grid   = ones(Float64, length(a_grid_wl_sg), length(wvfs))
     for (w, wl) in enumerate(a_grid_wl_sg)
         sgflt_deriv = SavitzkyGolayFilter(wl, 2, 1)
-        wvfs_sgflt_deriv = sgflt_deriv.(wvfs_pz)
-        current_max = get_wvf_maximum.(wvfs_sgflt_deriv, 20u"µs", 100u"µs")
+        current_max = get_wvf_maximum.(sgflt_deriv.(wvfs), 20u"µs", 100u"µs")
 
         aoe_grid[w, :]     = ustrip.(current_max) ./ e_rtft
     end

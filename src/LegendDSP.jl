@@ -27,8 +27,8 @@ import Adapt
 
 
 include("tailstats.jl")
-include("utils.jl")
 include("types.jl")
+include("utils.jl")
 include("dsp_decaytime.jl")
 include("dsp_filter_optimization.jl")
 include("dsp_icpc.jl")
