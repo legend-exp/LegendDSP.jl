@@ -125,6 +125,9 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     # t0 determination
     t0 = get_t0(wvfs, t0_threshold; flt_pars=config.kwargs_pars.t0_flt_pars, mintot=config.kwargs_pars.t0_mintot)
 
+    # if all waveforms are saturated set threshold to 1.0 to avoid numerical problems
+    replace!(wvf_max, zero(wvf_max[1]) => one(wvf_max[1]))
+
     # get threshold points in rise
     t10 = get_threshold(wvfs, wvf_max .* 0.1; mintot=config.kwargs_pars.tx_mintot)
     t50 = get_threshold(wvfs, wvf_max .* 0.5; mintot=config.kwargs_pars.tx_mintot)
@@ -176,7 +179,10 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
     
     # get position of current rise
-    t50_current = get_threshold(wvfs_sgflt_deriv, maximum.(wvfs_sgflt_deriv.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+    thres = maximum.(wvfs_sgflt_deriv.signal) .* 0.5
+    replace!(thres, zero(thres[1]) => one(thres[1]))
+
+    t50_current = get_threshold(wvfs_sgflt_deriv, thres; mintot=config.kwargs_pars.tx_mintot)
 
     # invert waveform for DC tagging
     # wvfs --> wvfs_pz_inv
