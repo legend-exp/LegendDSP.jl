@@ -47,7 +47,7 @@ function dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
     wvf_max = maximum.(wvfs.signal)
 
     # t50 determination
-    t50 = get_t50(wvfs, wvf_max)
+    t50 = get_threshold(wvfs, 0.5 .* wvf_max)
 
     # extract energy and ENC noise param from maximum of filtered wvfs
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
