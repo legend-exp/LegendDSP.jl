@@ -126,7 +126,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     t0 = get_t0(wvfs, t0_threshold; flt_pars=config.kwargs_pars.t0_flt_pars, mintot=config.kwargs_pars.t0_mintot)
 
     # if all waveforms are saturated set threshold to 1.0 to avoid numerical problems
-    replace!(wvf_max, zero(wvf_max[1]) => one(wvf_max[1]))
+    # replace!(wvf_max, zero(wvf_max[1]) => one(wvf_max[1]))
 
     # get threshold points in rise
     t10 = get_threshold(wvfs, wvf_max .* 0.1; mintot=config.kwargs_pars.tx_mintot)
@@ -180,7 +180,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     
     # get position of current rise
     thres = maximum.(wvfs_sgflt_deriv.signal) .* 0.5
-    replace!(thres, zero(thres[1]) => one(thres[1]))
+    # replace!(thres, zero(thres[1]) => one(thres[1]))
 
     t50_current = get_threshold(wvfs_sgflt_deriv, thres; mintot=config.kwargs_pars.tx_mintot)
 

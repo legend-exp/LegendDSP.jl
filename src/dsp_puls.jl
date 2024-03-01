@@ -38,7 +38,7 @@ function dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
     efc  = data.daqenergy
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
