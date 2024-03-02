@@ -72,11 +72,12 @@ function dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict) where {Q 
     # integrate derivative
     integrator_filter = IntegratorFilter(gain=1)
     wvfs_der_int = integrator_filter.(wvfs_sgflt_savitz)
+
     # get blstats on derivative
-    t_min = minimum(wvfs_der_int[1].time)
+    time_min = minimum(wvfs_der_int[1].time)
     Δt = 3*step(wvfs_der_int[1].time)
-    blstats = signalstats.(wvfs_der_int, fill(t_min, length(wvfs_der_int)), ifelse.(inters.x .< t_min + Δt, t_min + Δt, inters.x))
-    sigstats = signalstats.(wvfs_der_int, t_min, last(wvfs_der_int[1].time))
+    bl_stats = signalstats.(wvfs_der_int, Ref(time_min), ifelse.(minimum.(inters.x; init=0u"s") .< time_min + Δt, time_min + Δt, minimum.(inters.x; init=0u"s")))
+    sigstats = signalstats.(wvfs_der_int, time_min, last(wvfs_der_int[1].time))
     
     # flip around x-axis the filtered waveforms
     flipped_wf = multiply_waveform.(wvfs_der_int, -1.0)
