@@ -1,31 +1,36 @@
 # This file is a part of RadiationDetectorDSP.jl, licensed under the MIT License (MIT).
 
-struct HaarWaveletFilter <: AbstractRadSigFilter{LinearFiltering}
-    Δ::Int
+struct HaarTypeWaveletFilter <: AbstractRadSigFilter{LinearFiltering}
+    sampling_rate::Int
+    length::Int
 end
 
-export HaarWaveletFilter
+export HaarTypeWaveletFilter
 
-struct HaarWaveletFilterInstance{T} <: AbstractRadSigFilterInstance{LinearFiltering}
-    Δ::Int
+struct HaarTypeWaveletFilterInstance{T} <: AbstractRadSigFilterInstance{LinearFiltering}
+    sampling_rate::Int
+    length::Int
     n_input::Int
 end
 
-function fltinstance(flt::HaarWaveletFilter, input::SamplingInfo{T}) where T
-    HaarWaveletFilterInstance{T}(flt.Δ, length(input.axis))
+function fltinstance(flt::HaarTypeWaveletFilter, input::SamplingInfo{T}) where T
+    HaarTypeWaveletFilterInstance{T}(flt.sampling_rate, flt.length, length(input.axis))
 end
 
-flt_output_length(fi::HaarWaveletFilterInstance) = (fi.n_input - 1)÷fi.Δ
-flt_output_smpltype(fi::HaarWaveletFilterInstance) = flt_input_smpltype(fi)
-flt_input_smpltype(::HaarWaveletFilterInstance{T}) where T = T
+flt_output_smpltype(fi::HaarTypeWaveletFilterInstance) = flt_input_smpltype(fi)
+flt_input_smpltype(::HaarTypeWaveletFilterInstance{T}) where T = T
+flt_output_length(fi::HaarTypeWaveletFilterInstance) = 
+    ceil(Int, fi.n_input/fi.sampling_rate)
+flt_output_time_axis(fi::HaarTypeWaveletFilter, 
+    time::AbstractVector{<:RealQuantity}) = time[1:fi.sampling_rate:end]
 
-
-function rdfilt!(output::AbstractVector{T}, fi::HaarWaveletFilterInstance{T}, input::AbstractVector{T}) where T
-    invsq2 = inv(sqrt(T(2)))
+function rdfilt!(output::AbstractVector{T}, fi::HaarTypeWaveletFilterInstance{T}, input::AbstractVector{T}) where T
+    invsqrt = inv(sqrt(T(fi.length)))
     @assert flt_output_length(fi) == length(output) "output length not compatible with filter"
     @inbounds @simd for i in eachindex(output)
-        _i = i*fi.Δ
-        output[i] = (input[_i] + input[_i + 1]) * invsq2
+        to = min(fi.n_input, (i-1)*fi.sampling_rate + 1)
+        from = max(1, to + 1 - fi.length)
+        output[i] = sum(view(input, from:to)) * invsqrt
     end
     output
 end
