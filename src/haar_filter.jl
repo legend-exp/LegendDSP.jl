@@ -26,12 +26,14 @@ RadiationDetectorDSP.flt_output_time_axis(fi::HaarTypeWaveletFilterInstance, tim
 function RadiationDetectorDSP.rdfilt!(output::AbstractVector{T}, fi::HaarTypeWaveletFilterInstance{T}, input::AbstractVector{T}) where T
     invsqrt = inv(sqrt(T(fi.length)))
     @assert flt_output_length(fi) == length(output) "output length not compatible with filter"
-    Δidx = fi.length - 1
-    output[1] = (input[1] + input[1+Δidx]) * invsqrt
-    output[end] = (input[end] + input[end-Δidx]) * invsqrt
-    for i in 2:length(output)-1
-        j = (i-1)*fi.down_sampling_rate + 1
-        output[i] = sum(view(input, j:j+Δidx)) * invsqrt
+    @inbounds @simd for i in eachindex(output)
+        from = (i-1)*fi.down_sampling_rate + 1
+        to = from + fi.length - 1
+        result::T = zero(T)
+        for j in from:to
+            result += input[min(end, max(1, j))]
+        end
+        output[i] = result * invsqrt
     end
     output
 end
