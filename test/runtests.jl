@@ -4,6 +4,7 @@ import Test
 
 Test.@testset "Package LegendDSP" begin
     include("test_aqua.jl")
+    include("test_haar_filter.jl")
     # include("test_SOMETHING.jl")
     include("test_docs.jl")
     isempty(Test.detect_ambiguities(LegendDSP))
