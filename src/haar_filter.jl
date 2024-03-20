@@ -27,8 +27,8 @@ function RadiationDetectorDSP.rdfilt!(output::AbstractVector{T}, fi::HaarTypeWav
     invsqrt = inv(sqrt(T(fi.length)))
     @assert flt_output_length(fi) == length(output) "output length not compatible with filter"
     Δidx = fi.length - 1
-    output[1] = input[1] / invsqrt
-    output[end] = input[end] / invsqrt
+    output[1] = (input[1] + input[1+Δidx]) * invsqrt
+    output[end] = (input[end] + input[end-Δidx]) * invsqrt
     for i in 2:length(output)-1
         j = (i-1)*fi.down_sampling_rate + 1
         output[i] = sum(view(input, j:j+Δidx)) * invsqrt
