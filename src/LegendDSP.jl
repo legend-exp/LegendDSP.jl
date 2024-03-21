@@ -22,6 +22,7 @@ using Unitful
 using PropDicts
 using Tables
 using TypedTables
+using LIBSVM
 
 import Adapt
 import RadiationDetectorDSP: fltinstance, rdfilt!, flt_output_length, 
@@ -41,5 +42,7 @@ include("dsp_sipm.jl")
 include("dsp_routines.jl")
 include("dsp_puls.jl")
 include("haar_filter.jl")
+include("ml.jl")
+include("dsp_ml_routines.jl")
 
 end # module
