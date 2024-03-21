@@ -16,6 +16,6 @@ function get_qc_classifier(wvfs::ArrayOfRDWaveforms, f_evaluate_qc::Function)
 
     wvfs_flt_haar5 = multiply_waveform.(wvfs_flt_haar5, 1 ./ norm_fact)
 
-    y_pred, _ = f_evaluate_qc(flatview(VectorOfSimilarArrays(wvfs_flt_haar5_norm.signal)))
+    y_pred, _ = f_evaluate_qc(flatview(VectorOfSimilarArrays(wvfs_flt_haar5.signal)))
     y_pred
 end
