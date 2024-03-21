@@ -20,3 +20,4 @@ function get_qc_ml_func(dwts_norm::Matrix{<:Real}, dc_labels::Vector{<:Real}, hy
     # return a function that takes a signal and returns the prediction
     Base.Fix1(svmpredict, model)
 end
+export get_qc_ml_func
