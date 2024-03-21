@@ -59,7 +59,7 @@ The output data is a table with the following columns:
 - `n_sat_low_cons`: number of consecutive samples the waveform is saturated at low of FADC range
 - `n_sat_high_cons`: number of consecutive samples the waveform is saturated at high of FADC range
 """
-function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
+function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Function=nothing) where {Q <: Table, T<:Real}
     # get config parameters
     bl_window                         = config.bl_window
     t0_threshold                   = config.t0_threshold
@@ -107,6 +107,12 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
+    # get QC classifier labels
+    qc_labels = zeros(length(wvfs))
+    if !isnothing(f_evaluate_qc)
+        qc_labels = get_qc_classifier(wvfs, f_evaluate_qc)
+    end
+    
     # get wvf maximum
     wvf_max = maximum.(wvfs.signal)
     wvf_min = minimum.(wvfs.signal)
@@ -199,6 +205,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     # output Table 
     return TypedTables.Table(blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
     tailmean = pz_stats.mean, tailsigma = pz_stats.sigma, tailslope = pz_stats.slope, tailoffset = pz_stats.offset,
+    qc_label = qc_labels,
     t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99,
     t50_current = t50_current, 
     drift_time = drift_time,
