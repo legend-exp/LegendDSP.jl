@@ -179,7 +179,11 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     # extract current with optimal SG filter length with second order polynominal and first derivative
     wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs)
-    current_max = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(current_window), rightendpoint(current_window))
+    a_sg = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(current_window), rightendpoint(current_window))
+
+    a_30 = get_wvf_maximum.(SavitzkyGolayFilter(30u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
+    a_60 = get_wvf_maximum.(SavitzkyGolayFilter(60u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
+    a_raw = get_wvf_maximum.(DifferentiatorFilter(1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
 
     # get in-trace pile-up
     inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
@@ -216,7 +220,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     t0_inv = t0_inv,
     e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac, 
     qdrift = qdrift, lq = lq,
-    a = current_max,
+    a_sg = a_sg, a_30 = a_30, a_60 = a_60, a_raw = a_raw,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
     pretrace_diff = pretrace_diff, 
     inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
