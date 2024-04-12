@@ -59,16 +59,16 @@ The output data is a table with the following columns:
 - `n_sat_low_cons`: number of consecutive samples the waveform is saturated at low of FADC range
 - `n_sat_high_cons`: number of consecutive samples the waveform is saturated at high of FADC range
 """
-function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Function=nothing) where {Q <: Table, T<:Real}
+function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where {Q <: Table, T<:Real}
     # get config parameters
-    bl_window                         = config.bl_window
-    t0_threshold                   = config.t0_threshold
-    tail_window                = config.tail_window
-    inTraceCut_std_threshold       = config.inTraceCut_std_threshold
-    sg_flt_degree              = config.sg_flt_degree
-    current_window                    = config.current_window
-    qdrift_int_length                 = config.qdrift_int_length
-    lq_int_length                     = config.lq_int_length
+    bl_window                = config.bl_window
+    t0_threshold             = config.t0_threshold
+    tail_window              = config.tail_window
+    inTraceCut_std_threshold = config.inTraceCut_std_threshold
+    sg_flt_degree            = config.sg_flt_degree
+    current_window           = config.current_window
+    qdrift_int_length        = config.qdrift_int_length
+    lq_int_length            = config.lq_int_length
     
     # get optimal filter parameters
     trap_rt, trap_ft = get_fltpars(pars_filter, :trap, config)
@@ -109,7 +109,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     # get QC classifier labels
     qc_labels = zeros(length(wvfs))
-    if !isnothing(f_evaluate_qc)
+    if !ismissing(f_evaluate_qc)
         qc_labels = get_qc_classifier(wvfs, f_evaluate_qc)
     end
     
