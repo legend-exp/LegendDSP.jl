@@ -181,8 +181,8 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs)
     a_sg = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(current_window), rightendpoint(current_window))
 
-    a_30 = get_wvf_maximum.(SavitzkyGolayFilter(30u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
     a_60 = get_wvf_maximum.(SavitzkyGolayFilter(60u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
+    a_100 = get_wvf_maximum.(SavitzkyGolayFilter(100u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
     a_raw = get_wvf_maximum.(DifferentiatorFilter(1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
 
     # get in-trace pile-up
@@ -220,7 +220,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     t0_inv = t0_inv,
     e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac, 
     qdrift = qdrift, lq = lq,
-    a_sg = a_sg, a_30 = a_30, a_60 = a_60, a_raw = a_raw,
+    a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
     pretrace_diff = pretrace_diff, 
     inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
