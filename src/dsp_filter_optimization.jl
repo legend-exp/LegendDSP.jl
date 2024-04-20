@@ -342,7 +342,7 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     aoe_grid   = ones(Float64, length(a_grid_wl_sg), length(wvfs))
     for (w, wl) in enumerate(a_grid_wl_sg)
         # extract current with optimal SG filter length with second order polynominal and first derivative
-        wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs)
+        wvfs_sgflt_deriv = SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs)
         current_max = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(current_window), rightendpoint(current_window))
 
         aoe_grid[w, :]     = ustrip.(current_max) ./ e_rtft
