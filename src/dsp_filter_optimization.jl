@@ -8,7 +8,7 @@ Get ENC noise grid values for given trap grid rise times.
 # Returns
     - `enc_trap_grid`: Array ENC noise values for the given trap rise time grid
 """
-function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
+function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=2.0u"µs") where T<:Real
     # get config parameters
     bl_window                   = config.bl_window
     e_grid_rt_trap              = config.e_grid_rt_trap
@@ -53,7 +53,7 @@ Get ENC noise grid values for given CUSP grid rise times.
 # Returns
     - `enc_cusp_grid`: Array ENC noise values for the given CUSP rise time grid
 """
-function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
+function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=2.0u"µs") where T<:Real
     # get config parameters
     bl_window                   = config.bl_window
     e_grid_rt_cusp              = config.e_grid_rt_cusp
@@ -103,7 +103,7 @@ Get ENC noise grid values for given ZAC grid rise times.
 # Returns
     - `enc_zac_grid`: Array ENC noise values for the given ZAC rise time grid
 """
-function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
+function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=2.0u"µs") where T<:Real
     # get config parameters
     bl_window                   = config.bl_window
     e_grid_rt_zac               = config.e_grid_rt_zac
