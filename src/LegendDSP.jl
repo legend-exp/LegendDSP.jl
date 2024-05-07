@@ -23,6 +23,7 @@ using PropDicts
 using Tables
 using TypedTables
 using LIBSVM
+using LegendDataTypes
 
 import Adapt
 import RadiationDetectorDSP: fltinstance, rdfilt!, flt_output_length, 
