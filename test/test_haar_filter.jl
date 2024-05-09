@@ -63,7 +63,6 @@ using Unitful
             # Apply HaarAveragingFilter once
             wvf_out = flt(wvf)
             @test wvf_out.time == range(0u"μs", step = 128u"μs", length = 64)
-            @info diff(wvf_out.signal)
             @test isapprox(wvf_out.signal, collect(T, (0.5:4:252.5)*sqrt(2)), rtol = 10*eps(T))
         end
     end
