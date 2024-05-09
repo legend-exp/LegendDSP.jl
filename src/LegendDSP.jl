@@ -45,5 +45,6 @@ include("dsp_puls.jl")
 include("haar_filter.jl")
 include("ml.jl")
 include("dsp_ml_routines.jl")
+include("multi_intersect.jl")
 
 end # module
