@@ -350,3 +350,62 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     return (aoe = aoe_grid, e = e_rtft, blmean = bl_stats.mean, blslope = bl_stats.slope, t50 = t50)
 end
 export dsp_sg_optimization
+
+
+""" 
+    dsp_sg_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where T<:Real
+
+Optimize the Savitzky-Golay filter parameters for a given waveform set.
+
+# Returns
+    - `aoe`: Array of efficiency values for the given Savitzky-Golay filter parameters
+    - `e`: Array of energy values for the given Savitzky-Golay filter parameters
+    - `blmean`: Baseline mean value
+    - `blslope`: Baseline slope value
+"""
+function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::T = T(8)) where T<:Real
+    # get config parameters
+    bl_window      = config.bl_window
+    a_grid_wl_sg   = config.a_grid_wl_sg
+    sg_flt_degree  = config.sg_flt_degree
+    current_window = config.current_window
+
+    # get optimal filter parameters
+    rt = pars_filter.trap.rt
+    ft = pars_filter.trap.ft
+
+    # get baseline mean, std and slope
+    bl_stats = signalstats.(wvfs_pre, leftendpoint(bl_window), rightendpoint(bl_window))
+
+    # substract baseline from waveforms
+    wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
+    wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate)
+
+    # deconvolute waveform
+    deconv_flt = InvCRFilter(τ)
+    wvfs_pre = deconv_flt.(wvfs_pre)
+    wvfs_wdw = deconv_flt.(wvfs_wdw) 
+
+    # get wvf maximum
+    wvf_max_pre = maximum.(wvfs_pre.signal)
+    
+    # get signal estimator
+    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
+
+    # t50 determination
+    t50_pre = get_threshold(wvfs_pre, wvf_max_pre .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+
+    # get energy for filter parameters
+    uflt_rtft = TrapezoidalChargeFilter(rt, ft)
+    e_rtft    = signal_estimator.(uflt_rtft.(wvfs_pre), t50_pre .+ (rt + ft/2))
+
+    # extract current with filter length in grid with second order polynominal and first derivative
+    aoe_grid   = ones(Float64, length(a_grid_wl_sg), length(wvfs_wdw))
+    for (w, wl) in enumerate(a_grid_wl_sg)
+        # extract current with optimal SG filter length with second order polynominal and first derivative
+        a_sg = get_wvf_maximum.(SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
+        aoe_grid[w, :]     = ustrip.(a_sg) ./ e_rtft
+    end
+    return (aoe = aoe_grid, e = e_rtft, blmean = bl_stats.mean, blslope = bl_stats.slope, t50 = t50_pre)
+end
+export dsp_sg_optimization_compressed
