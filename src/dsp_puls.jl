@@ -31,7 +31,7 @@ function dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
     bl_window = config.bl_window
 
     # get waveform data 
-    wvfs = data.waveform
+    wvfs = data.waveform_presummed
     blfc = data.baseline
     ts   = data.timestamp
     evID = data.eventnumber
