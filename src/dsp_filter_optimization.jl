@@ -363,7 +363,7 @@ Optimize the Savitzky-Golay filter parameters for a given waveform set.
     - `blmean`: Baseline mean value
     - `blslope`: Baseline slope value
 """
-function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::T = T(8)) where T<:Real
+function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::AbstractFloat=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
     # get config parameters
     bl_window      = config.bl_window
     a_grid_wl_sg   = config.a_grid_wl_sg
@@ -380,6 +380,12 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
     # substract baseline from waveforms
     wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
     wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate)
+
+    # get QC classifier labels
+    qc_labels = zeros(length(wvfs_pre))
+    if !ismissing(f_evaluate_qc)
+        qc_labels = get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)
+    end
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
@@ -406,6 +412,10 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
         a_sg = get_wvf_maximum.(SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
         aoe_grid[w, :]     = ustrip.(a_sg) ./ e_rtft
     end
-    return (aoe = aoe_grid, e = e_rtft, blmean = bl_stats.mean, blslope = bl_stats.slope, t50 = t50_pre)
+    return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), e = e_rtft, 
+                blmean = bl_stats.mean, blslope = bl_stats.slope, 
+                t50 = t50_pre,
+                qc_label = qc_labels
+                )
 end
 export dsp_sg_optimization_compressed
