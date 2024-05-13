@@ -382,13 +382,12 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     t99 = get_threshold(wvfs_wdw, wvf_max_wdw .* 0.99; mintot=config.kwargs_pars.tx_mintot)
     
     drift_time = uconvert.(u"ns", t90 - t0)
-
+  
     # get Q-drift parameter
-    qdrift = get_qdrift(wvfs_wdw, t0, qdrift_int_length; pol_power=config.kwargs_pars.sig_interpolation_order, sign_est_length=config.kwargs_pars.sig_interpolation_length)
+    qdrift = get_qdrift(wvfs, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # get LQ parameter
-    lq  = get_qdrift(wvfs_wdw, t80, lq_int_length; pol_power=config.kwargs_pars.sig_interpolation_order, sign_est_length=config.kwargs_pars.sig_interpolation_length)
-
+    lq  = get_qdrift(wvfs, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
