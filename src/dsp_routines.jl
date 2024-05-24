@@ -65,14 +65,18 @@ end
 export get_qdrift
 
 """
-    get_intracePileUp(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, blmin::Unitful.Time{<:Real}, blmax::Unitful.Time{<:Real}; mintot::Unitful.Time=100.0u"ns")
+    get_intracePileUp(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
 
 Get position and multiplicity of in-trace pile-up as intersect of reversed derivative signal with threshold as multiple of std. The `wvfs` have to be a current signal.
 """
 function get_intracePileUp(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
     # get position and multiplicity of in-trace pile-up as intersect of reversed derivative signal with threshold as multiple of std
     flt_intersec_inTrace = Intersect(mintot = mintot)
-    inTrace_pileUp       = flt_intersec_inTrace.(reverse_waveform.(wvfs), signalstats.(wvfs, leftendpoint(bl_window) + first(wvfs[1].time), rightendpoint(bl_window)).sigma .* sigma_threshold)
+    thres = signalstats.(wvfs, leftendpoint(bl_window) + first(wvfs[1].time), rightendpoint(bl_window)).sigma .* sigma_threshold
+    # replace with high threshold if all values are saturated
+    replace!(thres, zero(thres[1]) => one(thres[1]))
+
+    inTrace_pileUp       = flt_intersec_inTrace.(reverse_waveform.(wvfs), thres)
     # return intersect position measured from the non-reversed waveform and multiplicity
     (intersect = last(wvfs[1].time) .- inTrace_pileUp.x, n = inTrace_pileUp.multiplicity)
 end

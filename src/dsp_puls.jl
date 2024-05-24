@@ -31,14 +31,14 @@ function dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
     bl_window = config.bl_window
 
     # get waveform data 
-    wvfs = data.waveform
+    wvfs = data.waveform_presummed
     blfc = data.baseline
     ts   = data.timestamp
     evID = data.eventnumber
     efc  = data.daqenergy
 
     # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, first(bl_window), last(bl_window))
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
@@ -47,7 +47,7 @@ function dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
     wvf_max = maximum.(wvfs.signal)
 
     # t50 determination
-    t50 = get_t50(wvfs, wvf_max)
+    t50 = get_threshold(wvfs, 0.5 .* wvf_max)
 
     # extract energy and ENC noise param from maximum of filtered wvfs
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")

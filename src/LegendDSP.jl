@@ -22,8 +22,12 @@ using Unitful
 using PropDicts
 using Tables
 using TypedTables
+using LIBSVM
+using LegendDataTypes
 
 import Adapt
+import RadiationDetectorDSP: fltinstance, rdfilt!, flt_output_length, 
+    flt_input_smpltype, flt_output_smpltype
 
 
 include("tailstats.jl")
@@ -38,5 +42,8 @@ include("intersect_maximum.jl")
 include("dsp_sipm.jl")
 include("dsp_routines.jl")
 include("dsp_puls.jl")
+include("haar_filter.jl")
+include("ml.jl")
+include("dsp_ml_routines.jl")
 
 end # module

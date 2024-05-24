@@ -37,9 +37,9 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         # fit window for current extraction
         dsp_metadata.current_window.min .. dsp_metadata.current_window.max,
         # Integration length for QDrift extraction
-        (first(dsp_metadata.qdrift_int_length):1.0*unit(first(dsp_metadata.qdrift_int_length)):last(dsp_metadata.qdrift_int_length)),
+        (first(dsp_metadata.qdrift_int_length):0.1*unit(first(dsp_metadata.qdrift_int_length)):last(dsp_metadata.qdrift_int_length)),
         # Integration length for LQ extraction
-        (first(dsp_metadata.lq_int_length):1.0*unit(first(dsp_metadata.qdrift_int_length)):last(dsp_metadata.lq_int_length)),
+        (first(dsp_metadata.lq_int_length):0.1*unit(first(dsp_metadata.qdrift_int_length)):last(dsp_metadata.lq_int_length)),
 
         # rise and flat-top time grid scan ranges for trapezoidal filter
         dsp_metadata.e_grid_trap.rt.start:dsp_metadata.e_grid_trap.rt.step:dsp_metadata.e_grid_trap.rt.stop,
