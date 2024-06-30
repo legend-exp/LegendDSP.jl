@@ -61,7 +61,7 @@ function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     flt_length_cusp             = config.flt_length_cusp
     cusp_scale                  = ustrip(NoUnits, flt_length_cusp/step(wvfs[1].time))
 
-    # set tau for CUSP filter to very high number to switch of CR filter
+    # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
 
     # get baseline mean, std and slope
@@ -111,7 +111,7 @@ function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
     flt_length_zac              = config.flt_length_zac
     zac_scale                   = ustrip(NoUnits, flt_length_zac/step(wvfs[1].time))
 
-    # set tau for ZAC filter to very high number to switch of CR filter
+    # set τ for ZAC filter to very high number to switch of CR filter
     τ_zac = 10000000.0u"µs"
 
     # get baseline mean, std and slope
@@ -207,7 +207,7 @@ function dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     flt_length_cusp             = config.flt_length_cusp
     cusp_scale                  = ustrip(NoUnits, flt_length_cusp/step(wvfs[1].time))
 
-    # set tau for CUSP filter to very high number to switch of CR filter
+    # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
 
     # get baseline mean, std and slope
@@ -259,7 +259,7 @@ function dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
     flt_length_zac              = config.flt_length_zac
     zac_scale                   = ustrip(NoUnits, flt_length_zac/step(wvfs[1].time))
 
-    # set tau for ZAC filter to very high number to switch of CR filter
+    # set τ for ZAC filter to very high number to switch of CR filter
     τ_zac = 10000000.0u"µs"
 
     # get baseline mean, std and slope

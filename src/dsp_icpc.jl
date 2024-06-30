@@ -94,7 +94,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     sat_low, sat_high = 0, 2^bit_depth - bit_depth
     sat_stats = saturation.(wvfs, sat_low, sat_high)
 
-    # set tau for CUSP filter to very high number to switch of CR filter
+    # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
     τ_zac = 10000000.0u"µs"
 
@@ -331,7 +331,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     sat_low, sat_high = 0, (2^bit_depth - bit_depth) * first(presum_rate)
     sat_stats = saturation.(wvfs_pre, sat_low, sat_high)
 
-    # set tau for CUSP filter to very high number to switch of CR filter
+    # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
     τ_zac = 10000000.0u"µs"
 
