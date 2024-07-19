@@ -1,6 +1,89 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
+    dsp_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
+
+Get QC DSP for filter parameter optimization for a given waveform set.
+"""
+function dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
+    _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier, f_evaluate_qc))
+end
+export dsp_qc_flt_optimization
+
+"""
+    dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
+
+Get QC DSP for filter parameter optimization for a given waveform set.
+"""
+function dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function) 
+    _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier_compressed, f_evaluate_qc))
+end
+export dsp_qc_flt_optimization_compressed
+
+function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, get_qc::Function)
+    # get baseline mean, std and slope
+    bl_stats = signalstats.(wvfs, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
+
+    # substract baseline from waveforms
+    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+
+    # deconvolute waveform
+    deconv_flt = InvCRFilter(τ)
+    wvfs = deconv_flt.(wvfs)
+
+    # get signal estimator
+    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
+
+    # t50 determination
+    t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+
+    # get QC classifier labels
+    qc_labels = get_qc(wvfs)
+
+    # get default filter parameters
+    rt = config.default_flt_param.trap.rt
+    ft = config.default_flt_param.trap.ft
+
+    # get energy for simple trap filtering
+    uflt_rtft = TrapezoidalChargeFilter(rt, ft)
+    e_rtft    = signal_estimator.(uflt_rtft.(wvfs), t50 .+ (rt + ft/2))
+
+    return TypedTables.Table(
+                e = e_rtft, 
+                blmean = bl_stats.mean, blslope = bl_stats.slope, 
+                t50 = t50,
+                qc_label = qc_labels
+            )
+end
+
+"""
+    dsp_qdrift_flt_optimization(wvfs::ArrayOfRDWaveforms, blmean::Vector{<:Real}, config::DSPConfig, τ::Unitful.Time{<:Real})
+
+Get QDrift filter parameter optimization for a given waveform set.
+"""
+function dsp_qdrift_flt_optimization(wvfs::ArrayOfRDWaveforms, blmean::Vector{<:Real}, config::DSPConfig, τ::Unitful.Time{<:Real})
+    # get config parameters
+    t0_threshold      = config.t0_threshold
+    qdrift_int_length = config.qdrift_int_length
+
+    # substract baseline from waveforms
+    wvfs = shift_waveform.(wvfs, -blmean)
+
+    # deconvolute waveform 
+    # --> wvfs = wvfs_pz
+    deconv_flt = InvCRFilter(τ)
+    wvfs = deconv_flt.(wvfs)
+
+    # t0 determination
+    t0 = get_t0(wvfs, t0_threshold; flt_pars=config.kwargs_pars.t0_flt_pars, mintot=config.kwargs_pars.t0_mintot)
+    
+    # get qdrift
+    get_qdrift(wvfs, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+end
+export dsp_qdrift_flt_optimization
+
+
+"""
     dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
 
 Get ENC noise grid values for given trap grid rise times.
