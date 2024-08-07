@@ -26,10 +26,11 @@ The output data is a table with the following columns:
 """
 function dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict) where {Q <: Table}
     # get dsp meta parameters
-    MINTOT_INTERSECT     = config.min_tot
-    MAXTOT_INTERSECT     = config.max_tot
-    SAVITZ_WINDOW_LENGTH = config.sg_window_length
-    t0_window            = config.t0_window
+    min_tot_intersect     = config.min_tot_intersect
+    max_tot_intersect     = config.max_tot_intersect
+    sg_window_length     = config.sg_window_length
+    sg_flt_degree        = config.sg_flt_degree
+    t0_hpge_window       = config.t0_hpge_window
 
     # get config parameters
     threshold    = pars_threshold.sigma_thrs * config.n_sigma_threshold
@@ -53,7 +54,7 @@ function dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict) where {Q 
     t_max = uconvert.(u"µs", flt_intersect.(wvfs, 0.99999 .* wvfs_max).x)
     t_min = uconvert.(u"µs", flt_intersect.(wvfs, wvfs_min).x)
 
-    uflt_trunc = TruncateFilter(first(t0_window)..last(t0_window))
+    uflt_trunc = TruncateFilter(first(t0_hpge_window)..last(t0_hpge_window))
     wvfs_trunc = uflt_trunc.(wvfs)
     wvfs_trunc_max = maximum.(wvfs_trunc.signal)
     wvfs_trunc_min = minimum.(wvfs_trunc.signal)
@@ -61,11 +62,11 @@ function dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict) where {Q 
     t_trunc_min = uconvert.(u"µs", flt_intersect.(wvfs_trunc, wvfs_trunc_min).x)
 
     # savitzky golay filter: takes derivative of waveform plus smoothing
-    sgflt_savitz = SavitzkyGolayFilter(SAVITZ_WINDOW_LENGTH, 2, 1)
+    sgflt_savitz = SavitzkyGolayFilter(sg_window_length, sg_flt_degree, 1)
     wvfs_sgflt_savitz = sgflt_savitz.(wvfs)
 
     # maximum finder
-    intflt = IntersectMaximum(MINTOT_INTERSECT, MAXTOT_INTERSECT)
+    intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
     inters = intflt.(wvfs_sgflt_savitz, threshold)
 
     # remove discharges
@@ -125,10 +126,11 @@ The output data is a table with the following columns:
 """
 function dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict) where {Q <: Table}
     # get dsp meta parameters
-    MINTOT_INTERSECT     = config.min_tot
-    MAXTOT_INTERSECT     = config.max_tot
-    SAVITZ_WINDOW_LENGTH = config.sg_window_length
-    t0_window            = config.t0_window
+    min_tot_intersect     = config.min_tot_intersect
+    max_tot_intersect     = config.max_tot_intersect
+    sg_window_length = config.sg_window_length
+    sg_flt_degree        = config.sg_flt_degree
+    t0_hpge_window            = config.t0_hpge_window
 
     # get config parameters
     threshold    = pars_threshold.sigma_thrs * config.n_sigma_threshold
@@ -152,7 +154,7 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict
     t_max = uconvert.(u"µs", flt_intersect.(wvfs, 0.99999 .* wvfs_max).x)
     t_min = uconvert.(u"µs", flt_intersect.(wvfs, wvfs_min).x)
 
-    uflt_trunc = TruncateFilter(first(t0_window)..last(t0_window))
+    uflt_trunc = TruncateFilter(first(t0_hpge_window)..last(t0_hpge_window))
     wvfs_trunc = uflt_trunc.(wvfs)
     wvfs_trunc_max = maximum.(wvfs_trunc.signal)
     wvfs_trunc_min = minimum.(wvfs_trunc.signal)
@@ -160,11 +162,11 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict
     t_trunc_min = uconvert.(u"µs", flt_intersect.(wvfs_trunc, wvfs_trunc_min).x)
 
     # savitzky golay filter: takes derivative of waveform plus smoothing
-    sgflt_savitz = SavitzkyGolayFilter(SAVITZ_WINDOW_LENGTH, 2, 1)
+    sgflt_savitz = SavitzkyGolayFilter(sg_window_length, sg_flt_degree, 1)
     wvfs_sgflt_savitz = sgflt_savitz.(wvfs)
 
     # maximum finder
-    intflt = IntersectMaximum(MINTOT_INTERSECT, MAXTOT_INTERSECT)
+    intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
     inters = intflt.(wvfs_sgflt_savitz, threshold)
 
     # remove discharges
