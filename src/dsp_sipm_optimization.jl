@@ -13,7 +13,7 @@ The function is used to calculate the thresholds for the SiPMs.
 # Returns
 - `Table`: Table with the baseline of the waveforms and the baseline of the waveforms with the sign flipped
 """
-function dsp_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, config::PropDict) where {Q <: Table}
+function dsp_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, config::PropDict)
     # get dsp meta parameters
     sg_window_length     = config.sg_window_length
     sg_flt_degree        = config.sg_flt_degree
