@@ -2,7 +2,7 @@
 """
     struct ModifiedSincFilter{T<:RealQuantity} <: AbstractRadFIRFilter{}
 
-A [Modified-Sinc filter](https://pubs.acs.org/doi/10.1021/acsmeasuresciau.3c00017)
+A [Modified-Sinc filter](https://doi.org/10.1021/acsmeasuresciau.3c00017)
 Working example
 ```julia
 using RadiationDetectorSignals

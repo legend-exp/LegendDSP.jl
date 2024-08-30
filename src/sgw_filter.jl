@@ -1,7 +1,7 @@
 """
     struct WeightedSavitzkyGolayFilter{T<:RealQuantity} <: AbstractRadFIRFilter
 
-A [Weighted-Savitzky-Golay filter](https://pubs.acs.org/doi/10.1021/acsmeasuresciau.3c00017).
+A [Weighted-Savitzky-Golay filter](https://doi.org/10.1021/acsmeasuresciau.3c00017).
 Working example:
 ```julia
 using RadiationDetectorSignals
