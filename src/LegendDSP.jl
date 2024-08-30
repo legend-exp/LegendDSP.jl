@@ -47,5 +47,8 @@ include("ml.jl")
 include("dsp_ml_routines.jl")
 include("multi_intersect.jl")
 include("moving_window_multi.jl")
+include("ms_filter.jl")
+include("sgw_filter.jl")
+include("wh_filter.jl")
 
 end # module
