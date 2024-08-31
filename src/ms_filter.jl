@@ -2,7 +2,7 @@
 """
     struct ModifiedSincFilter{T<:RealQuantity} <: AbstractRadFIRFilter{}
 
-A [Modified-Sinc filter](https://doi.org/10.1021/acsmeasuresciau.3c00017)
+A [Modified-Sinc filter](https://doi.org/10.1021/acsmeasuresciau.1c00054)
 Working example
 ```julia
 using RadiationDetectorSignals
@@ -35,7 +35,7 @@ Base.@kwdef struct ModifiedSincFilter{T<:RealQuantity} <: AbstractRadFIRFilter
     "half-width of the kernel"
     m::T = 3
     function ModifiedSincFilter(d::Int, m::T) where T
-        s1 = "degree of ModifiedSincFilter needs to be even and be in the interval [2, 10]"
+        s1 = "degree of ModifiedSincFilter needs to be even and be in the interval [2, $(D_MAX)]"
         @assert valid_degree(d) s1
 
         new{T}(d, m)
@@ -59,7 +59,7 @@ Adapt.adapt_structure(to, flt::ModifiedSincFilter) = flt
 function fltinstance(flt::ModifiedSincFilter, fi::SamplingInfo{T}) where {T}
     _m = round(Int, ustrip(NoUnits, flt.m/step(fi.axis)))
     m_min = flt.d/2 + 2
-    s2 = "size of kernel to small for given degree"
+    s2 = "size of kernel too small for given degree"
     @assert _m >= m_min s2
 
     ModifiedSincFilterInstance{T}(flt.d, _m, length(fi.axis))
@@ -130,12 +130,12 @@ const MS_COEFFS = Dict(
 end
 
 """
-    makeFitWeights(d::Int, m::Int)
+    makeFitWeights(d::Int, m::Int) where {U}
 
 return the weights for the linear fit user for linear extrapolation at 
 at the right boundary.
 """
-function makeFitWeights(d::U, m::Int) where U
+function makeFitWeights(d::U, m::Int) where {U <: Integer}
     firstZero = (m+1)/(1.5 + d/2)
     β = 0.7 + 0.14*exp(-0.6*(d-4))
     l = ceil(Int, firstZero*β)
@@ -174,7 +174,7 @@ end
     weighted_linear_reg(w::AbstractVector, y::AbstractVector)
 
 Do a weighted linear regression of the data `y` with weights `w` and return
-the offset and slope. its assumed that the 
+the offset and slope. its assumed that x is a range from 1 to `length(y)`
 """
 function weighted_linear_reg(w::AbstractVector, y::AbstractVector)
     T = RadiationDetectorDSP._floattype(promote_type(eltype(w), eltype(y)))

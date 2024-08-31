@@ -1,7 +1,7 @@
 """
     struct WeightedSavitzkyGolayFilter{T<:RealQuantity} <: AbstractRadFIRFilter
 
-A [Weighted-Savitzky-Golay filter](https://doi.org/10.1021/acsmeasuresciau.3c00017).
+A [Weighted-Savitzky-Golay filter](https://doi.org/10.1021/acsmeasuresciau.1c00054).
 Working example:
 ```julia
 using RadiationDetectorSignals
@@ -65,7 +65,7 @@ const SGW_COEFFS = Dict(
     4 => [0.62303, 0.25310, -7.07317]    # HANNCUBE
 )
 
-const WEIGHTTYPES = (0, 1, 2, 3, 4)
+const WEIGHTTYPES = keys(SGW_COEFFS)
 
 function fltinstance(flt::WeightedSavitzkyGolayFilter, fi::SamplingInfo{T}
     ) where {T}
@@ -79,7 +79,7 @@ function fltinstance(flt::WeightedSavitzkyGolayFilter, fi::SamplingInfo{T}
     @assert length(fi.axis) >= 2*m + 1 msg1
     
     d_max = 2*m
-    msg2 = "degree to big for given kernel size; max degree: $(d_max)"
+    msg2 = "degree too big for given kernel size; max degree: $(d_max)"
     @assert flt.degree <= 2*m msg2
 
     WeightedSavitzkyGolayFilterInstance{T}(m, flt.degree, flt.weightType, l)
@@ -127,7 +127,7 @@ Adapt.adapt_structure(to, flt::WeightedSavitzkyGolayFilter) = flt
             sum = fma(kernel[j], x[idx], sum)
         end
         y[i] = sum
-        sum = 0.
+        sum = zero(T)
     end
     # near boundary points at the right
     sum = zero(T)
@@ -145,7 +145,7 @@ Adapt.adapt_structure(to, flt::WeightedSavitzkyGolayFilter) = flt
             sum = fma(kernel[j], x[idx], sum)
         end
         y[L-m+i] = sum
-        sum = 0.
+        sum = zero(T)
     end
     y
 end
@@ -205,27 +205,27 @@ function _unsafe_dot_w(x::AbstractVector, y::AbstractVector, w::AbstractVector)
     dotprod
 end
 
-function weightFunctionScale(missingFrac, weightType::Int)
+function weightFunctionScale(missingFrac::Real, weightType::Int)
     coeffs = SGW_COEFFS[weightType]
     missingFrac <= 0 ? 1 : _w(missingFrac, coeffs)
 end
 
-function weight_function(weight_type::Int, x::T) where T
-    decay = 2.0 # for GAUSS only
+function weight_function(weight_type::Int, x::T) where {T <: Real}
     if x <= -0.999999999999 || x >= 0.999999999999
-        return 0.0
+        return zero(T)
     elseif weight_type == 0
-        return 1.0
+        return one(T)
     elseif weight_type == 1
+        decay = T(2.0)
         return exp(-x^2 * decay) + exp(-(x - 2)^2 * decay) + exp(-(x + 2)^2 * decay) -
                2 * exp(-decay) - exp(-9 * decay) # Gaussian-like alpha=2
     elseif weight_type == 2
-        return cos(0.5 * π * x)^2 # Hann
+        return cos(π/2 * x)^2 # Hann
     elseif weight_type == 3
-        return (cos(0.5 * π * x))^4 # Hann-squared
+        return (cos(π/2 * x))^4 # Hann-squared
     else weight_type == 4
-        return (cos(0.5 * π * x))^6 # Hann-cube
+        return (cos(π/2 * x))^6 # Hann-cube
     end
 end
 
-@inline _w(x, v::AbstractVector) = 1 - v[1]/(1 + v[2]*x^v[3])
+@inline _w(x::Real, v::AbstractVector) = 1 - v[1]/(1 + v[2]*x^v[3])

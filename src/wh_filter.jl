@@ -1,8 +1,8 @@
 """
 
-    WhittakerHendersonFilter <: AbstractRadSigFilter{LinearFiltering}
+    struct WhittakerHendersonFilter <: AbstractRadSigFilter{LinearFiltering}
 
-A [Whittaker-Henderson filter](https://doi.org/10.1021/acsmeasuresciau.3c00017).
+A [Whittaker-Henderson filter](https://doi.org/10.1021/acsmeasuresciau.1c00054).
 Working example:
 ```julia
 using RadiationDetectorSignals
@@ -45,7 +45,7 @@ end
 function rdfilt!(output::AbstractVector, fi::WhittakerHendersonFilterInstance, input::AbstractVector)
     A = makeIPlusLambdaDprimeD(fi.λ, fi.p, length(output))
     choleskyL!(A)
-    solve!(output, A, input)
+    banded_cholesky_solve!(output, A, input)
 end
 
 RadiationDetectorDSP.flt_output_smpltype(fi::WhittakerHendersonFilterInstance{T}) where {T} = RadiationDetectorDSP._floattype(flt_input_smpltype(fi))
@@ -115,13 +115,13 @@ function choleskyL!(b::AbstractMatrix{T}) where {T}
 end
 
 """
-    solve!(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
+    banded_cholesky_solve!(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
 
-solve the lienar equation AA'x = y and store the result in x, where
+solve the linear equation `AA'x = y` and store the result in `x`, where
 `A` is the cholesky decomposition of a banded centro symmetric matrix.
-A[1, i] is the diagonal, A[2, i] is the first subdiagonal and so on.
+`A[1, i]` is the diagonal, `A[2, i]` is the first subdiagonal and so on.
 """
-function solve!(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
+function banded_cholesky_solve!(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     n = size(A, 2)
     dmax = size(A, 1) - 1
     T = RadiationDetectorDSP._floattype(eltype(x))
@@ -137,7 +137,7 @@ function solve!(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
 
     # Backward substitution
     @inbounds for i in reverse(axes(A, 2))
-        sum = 0.0
+        sum = zero(T)
         @simd for j in (i+1):min(i+dmax, n)
             sum = fma(A[j-i+1, i], x[j], sum)
         end

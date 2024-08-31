@@ -3,10 +3,21 @@ import RadiationDetectorDSP: AbstractConvFilterInstance,
     AbstractRadSigFilterInstance, LinearFiltering, _filterlen, _floattype
 
 """
-    struct MovingWindowMulti <: AbstractRadFIRFilter
+    struct MovingWindowMultiFilter <: AbstractRadFIRFilter
 
 apply left and right moving average windows to signal.
+Working example:
+```julia
+using RadiationDetectorSignals
+using Unitful
 
+signal = rand(100)
+t = range(0u"ms", 20u"ms", 100)
+
+wf = RDWaveform(t, signal)
+flt = MovingWindowMultiFilter(1u"ms")
+wf_new = flt(wf)
+```
 Constructors:
 
 * ```$(FUNCTIONNAME)(; fields...)```
