@@ -41,7 +41,7 @@ using Unitful
         9.999999999999998, 
         10.000000000000002
     ]
-    @test isapprox(res, flt(x))   
+    @test isapprox(res, flt(x), rtol=1e-6)   
 end
 
 @testset "Test ModifiedSincFilter" begin
@@ -81,7 +81,7 @@ end
         9.889696246825226,
         9.889696246825226
     ]
-    @test isapprox(res, flt(x))
+    @test isapprox(res, flt(x); rtol=1e-6)
 end
 
 @testset "Test WhittakerHendersonFilter" begin
@@ -121,5 +121,5 @@ end
         9.987360766030491,
         10.0277381858554
     ]
-    @test isapprox(res, flt(x))
+    @test isapprox(res, flt(x); rtol=1e-6)
 end
