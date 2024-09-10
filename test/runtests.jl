@@ -8,5 +8,6 @@ Test.@testset "Package LegendDSP" begin
     # include("test_SOMETHING.jl")
     include("test_multiintersect.jl")
     include("test_docs.jl")
+    include("test_alternative_filters.jl")
     isempty(Test.detect_ambiguities(LegendDSP))
 end # testset
