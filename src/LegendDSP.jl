@@ -29,6 +29,7 @@ import Adapt
 import RadiationDetectorDSP: fltinstance, rdfilt!, flt_output_length, 
     flt_input_smpltype, flt_output_smpltype
 
+using Unitful: RealOrRealQuantity as RealQuantity
 
 include("tailstats.jl")
 include("types.jl")
