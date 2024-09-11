@@ -1,9 +1,5 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
-const MaybeWithUnits{T<:Number} = Union{T,Quantity{<:T}}
-const RealQuantity = MaybeWithUnits{<:Real}
-
-
 """
     DSPConfig{T <: Real}
 
