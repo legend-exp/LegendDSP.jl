@@ -94,7 +94,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     sat_low, sat_high = 0, 2^bit_depth - bit_depth
     sat_stats = saturation.(wvfs, sat_low, sat_high)
 
-    # set tau for CUSP filter to very high number to switch of CR filter
+    # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
     τ_zac = 10000000.0u"µs"
 
@@ -331,7 +331,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     sat_low, sat_high = 0, (2^bit_depth - bit_depth) * first(presum_rate)
     sat_stats = saturation.(wvfs_pre, sat_low, sat_high)
 
-    # set tau for CUSP filter to very high number to switch of CR filter
+    # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
     τ_zac = 10000000.0u"µs"
 
@@ -365,7 +365,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     # --> wvfs = wvfs_pz
     deconv_flt = InvCRFilter(τ)
     wvfs_pre = deconv_flt.(wvfs_pre)
-    wvfs_wdw = deconv_flt.(wvfs_wdw)    
+    wvfs_wdw = deconv_flt.(wvfs_wdw)
 
     # get tail mean, std and slope
     pz_stats = signalstats.(wvfs_pre, leftendpoint(tail_window), rightendpoint(tail_window))
@@ -382,7 +382,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     t99 = get_threshold(wvfs_wdw, wvf_max_wdw .* 0.99; mintot=config.kwargs_pars.tx_mintot)
     
     drift_time = uconvert.(u"ns", t90 - t0)
-  
+
     # get Q-drift parameter
     qdrift = get_qdrift(wvfs_wdw, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
