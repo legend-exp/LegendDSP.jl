@@ -27,13 +27,15 @@ using LegendDataTypes
 
 import Adapt
 import RadiationDetectorDSP: fltinstance, rdfilt!, flt_output_length, 
-    flt_input_smpltype, flt_output_smpltype
+    flt_input_smpltype, flt_output_smpltype, _smpllen, smplinfo, SamplingInfo,
+    AbstractRadSigFilterInstance, LinearFiltering, _filterlen, _floattype
 
 using Unitful: RealOrRealQuantity as RealQuantity
 
 include("tailstats.jl")
 include("types.jl")
 include("utils.jl")
+include("derivative.jl")
 include("dsp_decaytime.jl")
 include("dsp_filter_optimization.jl")
 include("dsp_icpc.jl")
