@@ -183,7 +183,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     a_60 = get_wvf_maximum.(SavitzkyGolayFilter(60u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
     a_100 = get_wvf_maximum.(SavitzkyGolayFilter(100u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
-    a_raw = get_wvf_maximum.(DifferentiatorFilter(1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
+    a_raw = get_wvf_maximum.(DerivativeFilter(1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
 
     # get in-trace pile-up
     inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
@@ -418,7 +418,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     e_zac = signal_estimator.(uflt_zac_rtft.(wvfs_pre), t50_pre .+ (flt_length_zac /2))
 
     # extract current with optimal SG filter length with second order polynominal and first derivative
-    a_raw = get_wvf_maximum.(DifferentiatorFilter(1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
+    a_raw = get_wvf_maximum.(DerivativeFilter(1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
 
     a_sg = get_wvf_maximum.(SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
     a_60 = get_wvf_maximum.(SavitzkyGolayFilter(60u"ns", sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
