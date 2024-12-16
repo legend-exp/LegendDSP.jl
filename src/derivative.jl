@@ -38,8 +38,6 @@ function RadiationDetectorDSP.fltinstance(flt::DerivativeFilter{TG}, si::Samplin
     DerivativeFilterInstance{T, TG}(flt.gain, _smpllen(si))
 end
 
-
-RadiationDetectorDSP._filterlen(fi::DerivativeFilterInstance) = 1
 RadiationDetectorDSP.flt_output_smpltype(::DerivativeFilterInstance{T, TG})  where {T,TG} = promote_type(typeof(zero(T) * unit(TG)), TG)
 RadiationDetectorDSP.flt_input_smpltype(::DerivativeFilterInstance{T}) where {T} = T
 RadiationDetectorDSP.flt_output_length(fi::DerivativeFilterInstance) = fi.n_input
