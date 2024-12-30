@@ -1,7 +1,7 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, config::PropDict)
+    dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, config::PropDict)
 
 This function calculates the baseline of the waveforms and the baseline of the waveforms with the sign flipped.
 The function is used to calculate the thresholds for the SiPMs.
@@ -13,9 +13,8 @@ The function is used to calculate the thresholds for the SiPMs.
 # Returns
 - `Table`: Table with the baseline of the waveforms and the baseline of the waveforms with the sign flipped
 """
-function dsp_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, config::PropDict)
+function dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, sg_window_length::Unitful.Time{<:Real}, config::PropDict)
     # get dsp meta parameters
-    sg_window_length     = config.sg_window_length
     sg_flt_degree        = config.sg_flt_degree
 
     # get waveform data 
@@ -48,4 +47,42 @@ function dsp_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, config::PropDi
         bsl_flipped = bsl_flipped
     )
 end
-export dsp_sipm_thresholds_compressed
+export dsp_sg_sipm_thresholds_compressed
+
+
+
+function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_config::PropDict, optimization_config::PropDict)
+    # get dsp meta parameters
+    min_tot_intersect    = dsp_config.min_tot_intersect
+    max_tot_intersect    = dsp_config.max_tot_intersect
+    sg_flt_degree        = dsp_config.sg_flt_degree
+    threshold            = optimization_config.threshold
+    e_grid_wl            = optimization_config.e_grid_wl
+
+    # get waveform data 
+    wvfs = decode_data(wvfs)
+
+    # shift waveform by 0 to get Float64 conversation --> ToDO: check if this is necessary
+    wvfs = shift_waveform.(wvfs, 0.0)
+
+    # extract trig max for each waveform based on the grid
+    trig_max_grid   = ones(Float64, length(e_grid_wl), length(wvfs))
+    for (w, wl) in enumerate(e_grid_wl)
+        # savitzky golay filter: takes derivative of waveform plus smoothing
+        sgflt_savitz = SavitzkyGolayFilter(wl, sg_flt_degree, 1)
+        wvfs_sgflt_savitz = sgflt_savitz.(wvfs)
+        
+        # maximum finder
+        intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
+        inters = intflt.(wvfs_sgflt_savitz, threshold)
+        
+        trig_max_grid[w, :]     = inters.max
+    end
+
+    # output Table 
+    return TypedTables.Table(
+        bsl = bsl,
+        bsl_flipped = bsl_flipped
+    )
+end
+export dsp_sg_sipm_optimization_compressed
