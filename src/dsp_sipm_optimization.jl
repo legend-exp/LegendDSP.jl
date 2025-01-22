@@ -15,7 +15,7 @@ The function is used to calculate the thresholds for the SiPMs.
 """
 function dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, sg_window_length::Unitful.Time{<:Real}, config::PropDict)
     # get dsp meta parameters
-    sg_flt_degree        = config.sg_flt_degree
+    sg_flt_degree = config.sg_flt_degree
 
     # get waveform data 
     wvfs = decode_data(wvfs)
@@ -25,24 +25,28 @@ function dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, sg_window_l
 
     # savitzky golay filter: takes derivative of waveform plus smoothing
     sgflt_savitz = SavitzkyGolayFilter(sg_window_length, sg_flt_degree, 1)
-    wvfs_sgflt_savitz = sgflt_savitz.(wvfs)
+    wvfs = sgflt_savitz.(wvfs)
 
     # project waveforms on the y-axis
-    bsl = vec(flatview(wvfs_sgflt_savitz.signal));
+    bsl_deriv = vec(flatview(wvfs.signal))
 
     # remove discharges
     # integrate derivative
     integrator_filter = IntegratorFilter(gain=1)
-    wvfs_der_int = integrator_filter.(wvfs_sgflt_savitz)
+    wvfs = integrator_filter.(wvfs)
+
+    # project waveforms on the y-axis
+    bsl = vec(flatview(wvfs.signal))
 
     # flip around x-axis the filtered waveforms
-    flipped_wf = multiply_waveform.(wvfs_der_int, -1.0)
+    wvfs = multiply_waveform.(wvfs, -1.0)
 
     # find maxima in these flipped waveforms
-    bsl_flipped = vec(flatview(flipped_wf.signal))
+    bsl_flipped = vec(flatview(wvfs.signal))
 
     # output Table 
     return TypedTables.Table(
+        bsl_deriv = bsl_deriv,
         bsl = bsl,
         bsl_flipped = bsl_flipped
     )
@@ -50,15 +54,30 @@ end
 export dsp_sg_sipm_thresholds_compressed
 
 
+"""
+    dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_config::PropDict, optimization_config::PropDict)
 
+This function calculates DSP grid to find the optimal thresholds for the SiPMs.
+
+# Arguments
+- `wvfs::ArrayOfRDWaveforms`: Array of RDWaveforms
+- `dsp_config::PropDict`: Configuration parameters for the DSP
+- `optimization_config::PropDict`: Configuration parameters for the optimization
+
+# Returns
+- `Table`: Table with the optimal thresholds for the SiPMs
+"""
 function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_config::PropDict, optimization_config::PropDict)
     # get dsp meta parameters
     min_tot_intersect    = dsp_config.min_tot_intersect
     max_tot_intersect    = dsp_config.max_tot_intersect
+    n_σ_threshold        = dsp_config.n_σ_threshold
     sg_flt_degree        = dsp_config.sg_flt_degree
-    threshold            = optimization_config.threshold
     e_grid_wl            = optimization_config.e_grid_wl
-
+    n_wvfs_threshold     = optimization_config.threshold.n_wvfs
+    min_cut_threshold    = optimization_config.threshold.min_cut
+    max_cut_threshold    = optimization_config.threshold.max_cut
+    
     # get waveform data 
     wvfs = decode_data(wvfs)
 
@@ -66,23 +85,32 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
     wvfs = shift_waveform.(wvfs, 0.0)
 
     # extract trig max for each waveform based on the grid
-    trig_max_grid   = ones(Float64, length(e_grid_wl), length(wvfs))
-    for (w, wl) in enumerate(e_grid_wl)
+    trig_max_grid = Vector{Vector{Float64}}(undef, length(e_grid_wl))
+    thresholds_grid = Vector{Float64}(undef, length(e_grid_wl))
+    Threads.@threads for w in eachindex(e_grid_wl)
+        wl = e_grid_wl[w]
+
         # savitzky golay filter: takes derivative of waveform plus smoothing
         sgflt_savitz = SavitzkyGolayFilter(wl, sg_flt_degree, 1)
         wvfs_sgflt_savitz = sgflt_savitz.(wvfs)
+
+        # get baseline waveforms
+        bsl = vec(flatview(wvfs_sgflt_savitz[1:n_wvfs_threshold].signal));
+        filter!(in(min_cut_threshold..max_cut_threshold), bsl)
+        threshold = std(bsl) * n_σ_threshold
         
         # maximum finder
         intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
         inters = intflt.(wvfs_sgflt_savitz, threshold)
         
-        trig_max_grid[w, :]     = inters.max
+        trig_max_grid[w] = reduce(vcat, inters.max)
+        thresholds_grid[w]  = threshold
     end
 
     # output Table 
     return TypedTables.Table(
-        bsl = bsl,
-        bsl_flipped = bsl_flipped
+        trig_max_grid = VectorOfVectors(trig_max_grid),
+        thresholds_grid = thresholds_grid
     )
 end
 export dsp_sg_sipm_optimization_compressed
