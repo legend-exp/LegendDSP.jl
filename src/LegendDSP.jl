@@ -52,5 +52,6 @@ include("dsp_ml_routines.jl")
 include("multi_intersect.jl")
 include("moving_window_multi.jl")
 include("alternative_filters.jl")
+include("timeaxis.jl")
 
 end # module
