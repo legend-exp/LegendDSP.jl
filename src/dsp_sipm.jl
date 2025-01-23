@@ -133,8 +133,8 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict
     t0_hpge_window            = config.t0_hpge_window
 
     # get config parameters
-    threshold    = pars_threshold.trig.σ * config.n_sigma_threshold
-    threshold_DC = pars_threshold.dc.σ * config.n_sigma_dc_threshold
+    threshold    = pars_threshold.trig.σ * config.n_σ_threshold
+    threshold_DC = pars_threshold.dc.σ * config.n_σ_dc_threshold
 
     # get waveform data 
     wvfs = decode_data(data.waveform_bit_drop)
