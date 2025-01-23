@@ -74,9 +74,14 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
     n_σ_threshold        = dsp_config.n_σ_threshold
     sg_flt_degree        = dsp_config.sg_flt_degree
     e_grid_wl            = optimization_config.e_grid_wl
-    n_wvfs_threshold     = optimization_config.threshold.n_wvfs
     min_cut_threshold    = optimization_config.threshold.min_cut
     max_cut_threshold    = optimization_config.threshold.max_cut
+    
+    n_wvfs_threshold = if length(wvfs) < optimization_config.threshold.n_wvfs
+        length(wvfs)
+    else
+        optimization_config.threshold.n_wvfs
+    end
     
     # get waveform data 
     wvfs = decode_data(wvfs)
@@ -87,7 +92,7 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
     # extract trig max for each waveform based on the grid
     trig_max_grid = Vector{Vector{Float64}}(undef, length(e_grid_wl))
     thresholds_grid = Vector{Float64}(undef, length(e_grid_wl))
-    Threads.@threads for w in eachindex(e_grid_wl)
+    for w in eachindex(e_grid_wl)
         wl = e_grid_wl[w]
 
         # savitzky golay filter: takes derivative of waveform plus smoothing
@@ -95,7 +100,7 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
         wvfs_sgflt_savitz = sgflt_savitz.(wvfs)
 
         # get baseline waveforms
-        bsl = vec(flatview(wvfs_sgflt_savitz[1:n_wvfs_threshold].signal));
+        bsl = vec(flatview(wvfs_sgflt_savitz[1:n_wvfs_threshold].signal))
         filter!(in(min_cut_threshold..max_cut_threshold), bsl)
         threshold = std(bsl) * n_σ_threshold
         
@@ -107,10 +112,11 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
         thresholds_grid[w]  = threshold
     end
 
-    # output Table 
-    return TypedTables.Table(
-        trig_max_grid = VectorOfVectors(trig_max_grid),
-        thresholds_grid = thresholds_grid
-    )
+    # output Table
+    return TypedTables.Table(merge(NamedTuple{Tuple(Symbol.(e_grid_wl))}(trig_max_grid...), (thresholds = thresholds_grid, )))
+    # return TypedTables.Table(
+    #     trig_max_grid = VectorOfVectors(trig_max_grid),
+    #     thresholds_grid = thresholds_grid
+    # )
 end
 export dsp_sg_sipm_optimization_compressed
