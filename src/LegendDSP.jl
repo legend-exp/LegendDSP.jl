@@ -33,6 +33,7 @@ import RadiationDetectorDSP: fltinstance, rdfilt!, flt_output_length,
 using Unitful: RealOrRealQuantity as RealQuantity
 
 include("tailstats.jl")
+include("extremestats.jl")
 include("types.jl")
 include("utils.jl")
 include("derivative.jl")
