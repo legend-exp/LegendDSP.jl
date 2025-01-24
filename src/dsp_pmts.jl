@@ -14,7 +14,7 @@ function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     saturation_limit_low   = config.default.saturation_limit_low
 
     # get waveform data 
-    wvfs = data.waveform
+    wvfs = decode_data(data.waveform)
     ts   = data.timestamp
     ch  = data.channel
     blstats = signalstats.(wvfs, baseline_window_start, baseline_window_end) 
@@ -41,12 +41,12 @@ function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
 
     # output Table 
     return TypedTables.Table(
-        timestamp = ts, channel = ch, rawPulseHeight = raw_pulse_params.max, rawPulseLow = raw_pulse_params.min,
-        raw_tp_hi = raw_pulse_params.tmax, raw_tp_low = raw_pulse_params.tmin,
+        timestamp = ts, channel = ch, raw_pulse_height = raw_pulse_params.max, raw_pulse_low = raw_pulse_params.min,
+        raw_t0_hi = raw_pulse_params.tmax, raw_t0_low = raw_pulse_params.tmin,
         trig_max = trig.max, trig_t = trig.x, trig_mult = trig.multiplicity,
         sat_low = sat.low, sat_high = sat.high,
-        pulseHeight = pulse_params.max, pulseLow = pulse_params.min,
-        tp_hi = pulse_params.tmax, tp_low = pulse_params.tmin,
+        pulse_height = pulse_params.max, pulse_low = pulse_params.min,
+        t0_hi = pulse_params.tmax, t0_low = pulse_params.tmin,
         bl_mean = bl_stats.mean, bl_sigma = bl_stats.sigma, bl_slope = bl_stats.slope
     )
 end
