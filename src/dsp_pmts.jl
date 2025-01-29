@@ -7,8 +7,8 @@ function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     min_tot_intersect     = config.default.min_tot_intersect
     max_tot_intersect     = config.default.max_tot_intersect
     intersect_threshold   = config.default.intersect_threshold
-    wsg_window_length     = config.default.sg_window_length
-    wsg_flt_degree        = config.default.sg_flt_degree
+    wsg_window_length     = config.default.wsg_window_length
+    wsg_flt_degree        = config.default.wsg_flt_degree
     wsg_weight            = config.default.wsg_weight
     saturation_limit_high  = config.default.saturation_limit_high
     saturation_limit_low   = config.default.saturation_limit_low
@@ -20,7 +20,7 @@ function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     blstats = signalstats.(wvfs, baseline_window_start, baseline_window_end) 
 
     # substract baseline_window_end
-    wvfs = shift_waveform.(wvfs, -blstats.mean)
+    wf_blsub = shift_waveform.(wvfs, -blstats.mean)
 
     # get wvf maximum and minimum with timepoints
     raw_pulse_params = extremestats.(wf_blsub)
@@ -30,7 +30,7 @@ function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     trig = intflt.(wf_blsub, intersect_threshold) 
 
     # get saturated peaks
-    sat = saturation.(wf_blsub, saturation_limit_low, saturation_limit_high) 
+    sat = saturation.(wvfs, saturation_limit_low, saturation_limit_high) 
 
     # weighted savitzky golay filter
     w_sg = WeightedSavitzkyGolayFilter(wsg_window_length, wsg_flt_degree, wsg_weight) 
