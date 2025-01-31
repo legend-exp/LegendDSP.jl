@@ -67,6 +67,9 @@ This function calculates DSP grid to find the optimal thresholds for the SiPMs.
 # Returns
 - `Table`: Table with the optimal thresholds for the SiPMs
 """
+function dsp_sg_sipm_optimization_compressed end
+export dsp_sg_sipm_optimization_compressed
+
 function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_config::PropDict, optimization_config::PropDict)
     # get dsp meta parameters
     min_tot_intersect    = dsp_config.min_tot_intersect
@@ -113,10 +116,29 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
     end
 
     # output Table
-    return TypedTables.Table(merge(NamedTuple{Tuple(Symbol.(e_grid_wl))}(trig_max_grid...), (thresholds = thresholds_grid, )))
-    # return TypedTables.Table(
-    #     trig_max_grid = VectorOfVectors(trig_max_grid),
-    #     thresholds_grid = thresholds_grid
-    # )
+    return TypedTables.Table(
+        trig_max_grid = VectorOfVectors(trig_max_grid),
+        thresholds_grid = thresholds_grid
+    )
 end
-export dsp_sg_sipm_optimization_compressed
+
+function dsp_sg_sipm_optimization_compressed(n_max_wvfs::Int, wvfs::ArrayOfRDWaveforms, dsp_config::PropDict, optimization_config::PropDict)
+    # get dsp meta parameters
+    e_grid_wl = optimization_config.e_grid_wl
+
+    # flatten over waveform partitions
+    dsp_grid = LegendDataTypes.fast_flatten([let dsp_part = dsp_sg_sipm_optimization_compressed(wf, dsp_config, optimization_config)
+        TypedTables.Table(merge(NamedTuple{Tuple(Symbol.(e_grid_wl))}(dsp_part.trig_max_grid...), (thresholds = dsp_part.thresholds_grid, )))
+    end for wf in Iterators.partition(decode_data(wvfs), n_max_wvfs)])
+
+    trig_max_grid = Vector{Vector{Float64}}(undef, length(e_grid_wl))
+    for (w, wl) in enumerate(e_grid_wl)
+        trig_max_grid[w] = getproperty(dsp_grid, Symbol(wl))
+    end
+    thresholds_grid = [minimum(dsp_grid.thresholds[1:i:end]) for i in eachindex(e_grid_wl)]
+
+    return TypedTables.Table(
+        trig_max_grid = VectorOfVectors(trig_max_grid),
+        thresholds_grid = thresholds_grid
+    )
+end
