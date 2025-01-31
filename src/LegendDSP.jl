@@ -34,6 +34,7 @@ using Unitful: RealOrRealQuantity as RealQuantity
 
 include("tailstats.jl")
 include("extremestats.jl")
+include("thresholdstats.jl")
 include("types.jl")
 include("utils.jl")
 include("derivative.jl")
