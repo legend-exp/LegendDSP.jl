@@ -38,17 +38,11 @@ function dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, sg_window_l
     # project waveforms on the y-axis
     bsl = vec(flatview(wvfs.signal))
 
-    # flip around x-axis the filtered waveforms
-    wvfs = multiply_waveform.(wvfs, -1.0)
-
-    # find maxima in these flipped waveforms
-    bsl_flipped = vec(flatview(wvfs.signal))
-
     # output Table 
     return TypedTables.Table(
         bsl_deriv = bsl_deriv,
         bsl = bsl,
-        bsl_flipped = bsl_flipped
+        bsl_flipped = -bsl
     )
 end
 export dsp_sg_sipm_thresholds_compressed
@@ -80,11 +74,7 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
     min_cut_threshold    = optimization_config.threshold.min_cut
     max_cut_threshold    = optimization_config.threshold.max_cut
     
-    n_wvfs_threshold = if length(wvfs) < optimization_config.threshold.n_wvfs
-        length(wvfs)
-    else
-        optimization_config.threshold.n_wvfs
-    end
+    n_wvfs_threshold = min(length(wvfs), optimization_config.threshold.n_wvfs)  
     
     # get waveform data 
     wvfs = decode_data(wvfs)
@@ -104,8 +94,7 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
 
         # get baseline waveforms
         bsl = vec(flatview(wvfs_sgflt_savitz[1:n_wvfs_threshold].signal))
-        filter!(in(min_cut_threshold..max_cut_threshold), bsl)
-        threshold = std(bsl) * n_σ_threshold
+        threshold = thresholdstats(bsl, min_cut_threshold, max_cut_threshold) * n_σ_threshold  
         
         # maximum finder
         intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
