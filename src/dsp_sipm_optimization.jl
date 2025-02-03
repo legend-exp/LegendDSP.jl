@@ -124,8 +124,7 @@ function dsp_sg_sipm_optimization_compressed(n_max_wvfs::Int, wvfs::ArrayOfRDWav
     for (w, wl) in enumerate(e_grid_wl)
         trig_max_grid[w] = getproperty(dsp_grid, Symbol(wl))
     end
-    thresholds_grid = [minimum(dsp_grid.thresholds[1:i:end]) for i in eachindex(e_grid_wl)]
-
+    thresholds_grid = [minimum(dsp_grid.thresholds[i:length(e_grid_wl):end]) for i in eachindex(e_grid_wl)]
     return TypedTables.Table(
         trig_max_grid = VectorOfVectors(trig_max_grid),
         thresholds_grid = thresholds_grid
