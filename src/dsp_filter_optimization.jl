@@ -113,9 +113,7 @@ function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, Ï
     # get energy grid for efficient optimization
     enc_trap_grid = zeros(Float64, length(e_grid_rt_trap), length(wvfs))
     for (r, rt) in enumerate(e_grid_rt_trap)
-        if rt < ft
-            continue
-        end
+        
         uflt_rtft      = TrapezoidalChargeFilter(rt, ft)
         
         enc_rtft       = signal_estimator.(uflt_rtft.(wvfs), enc_pickoff_trap)
@@ -163,9 +161,7 @@ function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, Ï
     # get energy grid for efficient optimization
     enc_cusp_grid = zeros(Float64, length(collect(e_grid_rt_cusp)), length(wvfs))
     for (r, rt) in enumerate(e_grid_rt_cusp)
-        if rt < ft
-            continue
-        end
+        
         uflt_rtft      = CUSPChargeFilter(rt, ft, Ï„_cusp, flt_length_cusp, cusp_scale)
         
         enc_rtft       = signal_estimator.(uflt_rtft.(wvfs), enc_pickoff_cusp)
@@ -213,9 +209,7 @@ function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, Ï„
     # get energy grid for efficient optimization
     enc_zac_grid = zeros(Float64, length(e_grid_rt_zac), length(wvfs))
     for (r, rt) in enumerate(e_grid_rt_zac)
-        if rt < ft
-            continue
-        end
+        
         uflt_rtft      = ZACChargeFilter(rt, ft, Ï„_zac, flt_length_zac, zac_scale)
         
         enc_rtft       = signal_estimator.(uflt_rtft.(wvfs), enc_pickoff_zac)
@@ -260,9 +254,7 @@ function dsp_trap_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, Ï
     # get energy grid for efficient optimization
     e_grid   = Array{Union{Missing, Float32}}(missing, length(e_grid_ft_trap), length(wvfs))
     for (f, ft) in enumerate(e_grid_ft_trap)
-        if rt < ft
-            continue
-        end
+        
         uflt_rtft      = TrapezoidalChargeFilter(rt, ft)
         
         e_rtft         = signal_estimator.(uflt_rtft.(wvfs), t50 .+ (rt + ft/2))
@@ -312,9 +304,7 @@ function dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, Ï
     # get energy grid for efficient optimization
     e_grid   = Array{Union{Missing, Float32}}(missing, length(e_grid_ft_cusp), length(wvfs))
     for (f, ft) in enumerate(e_grid_ft_cusp)
-        if rt < ft
-            continue
-        end
+        
         uflt_rtft      = CUSPChargeFilter(rt, ft, Ï„_cusp, flt_length_cusp, cusp_scale)
         
         e_rtft         = signal_estimator.(uflt_rtft.(wvfs), t50 .+ flt_length_cusp/2)
@@ -364,9 +354,7 @@ function dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, Ï„
     # get energy grid for efficient optimization
     e_grid   = Array{Union{Missing, Float32}}(missing, length(e_grid_ft_zac), length(wvfs))
     for (f, ft) in enumerate(e_grid_ft_zac)
-        if rt < ft
-            continue
-        end
+        
         uflt_rtft      = ZACChargeFilter(rt, ft, Ï„_zac, flt_length_zac, zac_scale)
         
         e_rtft         = signal_estimator.(uflt_rtft.(wvfs), t50 .+ flt_length_zac/2)
