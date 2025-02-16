@@ -164,18 +164,24 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     # get trap energy of optimized rise and flat-top time
     uflt_trap_rtft = TrapezoidalChargeFilter(trap_rt, trap_ft)
+    wvfs_flt = uflt_trap_rtft.(wvfs)
 
-    e_trap = signal_estimator.(uflt_trap_rtft.(wvfs), t50 .+ (trap_rt + trap_ft/2))
+    e_trap = signal_estimator.(wvfs_flt, t50 .+ (trap_rt + trap_ft/2))
+    e_trap_extremestats = extremestats.(wvfs_flt)
 
     # get cusp energy of optimized rise and flat-top time
     uflt_cusp_rtft = CUSPChargeFilter(cusp_rt, cusp_ft, τ_cusp, flt_length_cusp, cusp_scale)
+    wvfs_flt = uflt_cusp_rtft.(wvfs)
 
-    e_cusp = signal_estimator.(uflt_cusp_rtft.(wvfs), t50 .+ (flt_length_cusp /2))
+    e_cusp = signal_estimator.(wvfs_flt, t50 .+ (flt_length_cusp /2))
+    e_cusp_extremestats = extremestats.(wvfs_flt)
 
     # get zac energy of optimized rise and flat-top time
     uflt_zac_rtft = ZACChargeFilter(zac_rt, zac_ft, τ_zac, flt_length_zac, zac_scale)
-
+    wvfs_flt = uflt_zac_rtft.(wvfs)
+    
     e_zac = signal_estimator.(uflt_zac_rtft.(wvfs), t50 .+ (flt_length_zac /2))
+    e_zac_extremestats = extremestats.(wvfs_flt)
 
     # extract current with optimal SG filter length with second order polynominal and first derivative
     wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs)
@@ -218,7 +224,9 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     e_10410 = e_10410, e_535 = e_535, e_313 = e_313,
     e_10410_inv = e_10410_max_inv, e_313_inv = e_313_max_inv,
     t0_inv = t0_inv,
-    e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac, 
+    e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
+    e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
+    t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
     qdrift = qdrift, lq = lq,
     a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
@@ -404,18 +412,24 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     # get trap energy of optimized rise and flat-top time
     uflt_trap_rtft = TrapezoidalChargeFilter(trap_rt, trap_ft)
+    wvfs_flt = uflt_trap_rtft.(wvfs_pre)
 
-    e_trap = signal_estimator.(uflt_trap_rtft.(wvfs_pre), t50_pre .+ (trap_rt + trap_ft/2))
+    e_trap = signal_estimator.(wvfs_flt, t50_pre .+ (trap_rt + trap_ft/2))
+    e_trap_extremestats = extremestats.(wvfs_flt)
 
     # get cusp energy of optimized rise and flat-top time
     uflt_cusp_rtft = CUSPChargeFilter(cusp_rt, cusp_ft, τ_cusp, flt_length_cusp, cusp_scale)
+    wvfs_flt = uflt_cusp_rtft.(wvfs_pre)
 
-    e_cusp = signal_estimator.(uflt_cusp_rtft.(wvfs_pre), t50_pre .+ (flt_length_cusp /2))
+    e_cusp = signal_estimator.(wvfs_flt, t50_pre .+ (flt_length_cusp /2))
+    e_cusp_extremestats = extremestats.(wvfs_flt)
 
     # get zac energy of optimized rise and flat-top time
     uflt_zac_rtft = ZACChargeFilter(zac_rt, zac_ft, τ_zac, flt_length_zac, zac_scale)
+    wvfs_flt = uflt_zac_rtft.(wvfs_pre)
 
-    e_zac = signal_estimator.(uflt_zac_rtft.(wvfs_pre), t50_pre .+ (flt_length_zac /2))
+    e_zac = signal_estimator.(wvfs_flt, t50_pre .+ (flt_length_zac /2))
+    e_zac_extremestats = extremestats.(wvfs_flt)
 
     # extract current with optimal SG filter length with second order polynominal and first derivative
     a_raw = get_wvf_maximum.(DerivativeFilter(1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
@@ -458,7 +472,9 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     e_10410 = e_10410, e_535 = e_535, e_313 = e_313,
     e_10410_inv = e_10410_max_inv, e_313_inv = e_313_max_inv,
     t0_inv = t0_inv,
-    e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac, 
+    e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
+    e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
+    t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
     qdrift = qdrift, lq = lq,
     a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc, deadtime = deadtime,
