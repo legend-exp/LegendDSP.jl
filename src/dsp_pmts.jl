@@ -2,6 +2,7 @@
 
 function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     # get dsp meta parameters
+    time_axis_step_length = config.default.time_axis_step_length
     baseline_window_start = config.default.baseline_window_start
     baseline_window_end   = config.default.baseline_window_end
     min_tot_intersect     = config.default.min_tot_intersect
@@ -14,13 +15,15 @@ function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     saturation_limit_low   = config.default.saturation_limit_low
 
     # get waveform data 
-    wvfs = decode_data(data.waveform)
+    waveform = decode_data(data.waveform)
+    time_flt = TimeAxisFilter(time_axis_step_length)
+    wvfs = time_flt.(waveform)
     ts   = data.timestamp
     ch  = data.channel
-    blstats = signalstats.(wvfs, baseline_window_start, baseline_window_end) 
+    bl_stats = signalstats.(wvfs, baseline_window_start, baseline_window_end) 
 
-    # substract baseline_window_end
-    wf_blsub = shift_waveform.(wvfs, -blstats.mean)
+    # substract baseline
+    wf_blsub = shift_waveform.(wvfs, -bl_stats.mean)
 
     # get wvf maximum and minimum with timepoints
     raw_pulse_params = extremestats.(wf_blsub)
@@ -33,7 +36,7 @@ function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     sat = saturation.(wvfs, saturation_limit_low, saturation_limit_high) 
 
     # weighted savitzky golay filter
-    w_sg = WeightedSavitzkyGolayFilter(wsg_window_length, wsg_flt_degree, wsg_weight) 
+    w_sg = WeightedSavitzkyGolayFilter(wsg_window_length, Int(wsg_flt_degree), Int(wsg_weight)) 
     w_sg_filter = w_sg.(wf_blsub)
 
     # get smoothed wvf maximum and minimum with timepoints
