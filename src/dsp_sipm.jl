@@ -24,17 +24,21 @@ The output data is a table with the following columns:
 - `trig_pos_DC`: trigger positions of discharges
 - `trig_max_DC`: trigger maxima of discharges
 """
-function dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict) where {Q <: Table}
+function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # get dsp meta parameters
     min_tot_intersect     = config.min_tot_intersect
     max_tot_intersect     = config.max_tot_intersect
-    sg_window_length     = config.sg_window_length
-    sg_flt_degree        = config.sg_flt_degree
-    t0_hpge_window       = config.t0_hpge_window
+    sg_flt_degree         = config.sg_flt_degree
+    t0_hpge_window        = config.t0_hpge_window
+    min_threshold         = config.min_threshold
+    max_threshold         = config.max_threshold
+    n_σ_threshold         = config.n_σ_threshold
+    min_dc_threshold      = config.min_dc_threshold
+    max_dc_threshold      = config.max_dc_threshold
+    n_σ_dc_threshold      = config.n_σ_dc_threshold
 
-    # get config parameters
-    threshold    = pars_threshold.sigma_thrs * config.n_sigma_threshold
-    threshold_DC = pars_threshold.sigma_DC * config.n_sigma_dc_threshold
+    # unpack optimization parameters
+    sg_window_length = pars_optimization.sg.wl
 
     # get waveform data 
     wvfs = data.waveform
@@ -47,19 +51,11 @@ function dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict) where {Q 
     wvfs = shift_waveform.(wvfs, 0.0)
 
     # get wvf maximum and minimum with timepoints
-    flt_intersect = Intersect(mintot = 1u"ns")
+    estats = extremestats.(wvfs)
 
-    wvfs_max = maximum.(wvfs.signal)
-    wvfs_min = minimum.(wvfs.signal)
-    t_max = uconvert.(u"µs", flt_intersect.(wvfs, 0.99999 .* wvfs_max).x)
-    t_min = uconvert.(u"µs", flt_intersect.(wvfs, wvfs_min).x)
-
+    # get wvf maximum and minimum with timepoints for truncated waveform
     uflt_trunc = TruncateFilter(first(t0_hpge_window)..last(t0_hpge_window))
-    wvfs_trunc = uflt_trunc.(wvfs)
-    wvfs_trunc_max = maximum.(wvfs_trunc.signal)
-    wvfs_trunc_min = minimum.(wvfs_trunc.signal)
-    t_trunc_max = uconvert.(u"µs", flt_intersect.(wvfs_trunc, 0.99999 .* wvfs_trunc_max).x)
-    t_trunc_min = uconvert.(u"µs", flt_intersect.(wvfs_trunc, wvfs_trunc_min).x)
+    estats_trunc = extremestats.(uflt_trunc.(wvfs))
 
     # savitzky golay filter: takes derivative of waveform plus smoothing
     sgflt_savitz = SavitzkyGolayFilter(sg_window_length, sg_flt_degree, 1)
@@ -67,7 +63,7 @@ function dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict) where {Q 
 
     # maximum finder
     intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
-    inters = intflt.(wvfs_sgflt_savitz, threshold)
+    inters = intflt.(wvfs_sgflt_savitz, n_σ_threshold .* thresholdstats.(wvfs_sgflt_savitz, min_threshold, max_threshold))
 
     # remove discharges
     # integrate derivative
@@ -83,12 +79,12 @@ function dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict) where {Q 
     # flip around x-axis the filtered waveforms
     flipped_wf = multiply_waveform.(wvfs_der_int, -1.0)
 
-    inters_DC = intflt.(flipped_wf, threshold_DC)
+    inters_DC = intflt.(flipped_wf, n_σ_dc_threshold .* thresholdstats.(flipped_wf, min_dc_threshold, max_dc_threshold))
 
     # output Table 
     return TypedTables.Table(
         blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
-        t_max = t_max, t_min = t_min, t_max_lar = t_trunc_max, t_min_lar = t_trunc_min,
+        t_max = uconvert.(u"µs", estats.tmax), t_min = uconvert.(u"µs", estats.tmin), t_max_lar = uconvert.(u"µs", estats_trunc.tmax), t_min_lar = uconvert.(u"µs", estats_trunc.tmin),
         e_max = wvfs_max, e_min = wvfs_min, e_max_lar = wvfs_trunc_max, e_min_lar = wvfs_trunc_min,
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
         wfmean = sigstats.mean, wfsigma = sigstats.sigma, wfslope = sigstats.slope, wfoffset = sigstats.offset,
@@ -124,17 +120,21 @@ The output data is a table with the following columns:
 - `trig_pos_DC`: trigger positions of discharges
 - `trig_max_DC`: trigger maxima of discharges
 """
-function dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict) where {Q <: Table}
+function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # get dsp meta parameters
     min_tot_intersect     = config.min_tot_intersect
     max_tot_intersect     = config.max_tot_intersect
-    sg_window_length = config.sg_window_length
-    sg_flt_degree        = config.sg_flt_degree
-    t0_hpge_window            = config.t0_hpge_window
+    sg_flt_degree         = config.sg_flt_degree
+    t0_hpge_window        = config.t0_hpge_window
+    min_threshold         = config.min_threshold
+    max_threshold         = config.max_threshold
+    n_σ_threshold         = config.n_σ_threshold
+    min_dc_threshold      = config.min_dc_threshold
+    max_dc_threshold      = config.max_dc_threshold
+    n_σ_dc_threshold      = config.n_σ_dc_threshold
 
-    # get config parameters
-    threshold    = pars_threshold.trig.σ * config.n_σ_threshold
-    threshold_DC = pars_threshold.dc.σ * config.n_σ_dc_threshold
+    # unpack optimization parameters
+    sg_window_length = pars_optimization.sg.wl
 
     # get waveform data 
     wvfs = decode_data(data.waveform_bit_drop)
@@ -147,19 +147,11 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict
     wvfs = shift_waveform.(wvfs, 0.0)
 
     # get wvf maximum and minimum with timepoints
-    flt_intersect = Intersect(mintot = 1u"ns")
+    estats = extremestats.(wvfs)
 
-    wvfs_max = maximum.(wvfs.signal)
-    wvfs_min = minimum.(wvfs.signal)
-    t_max = uconvert.(u"µs", flt_intersect.(wvfs, 0.99999 .* wvfs_max).x)
-    t_min = uconvert.(u"µs", flt_intersect.(wvfs, wvfs_min).x)
-
+    # get wvf maximum and minimum with timepoints for truncated waveform
     uflt_trunc = TruncateFilter(first(t0_hpge_window)..last(t0_hpge_window))
-    wvfs_trunc = uflt_trunc.(wvfs)
-    wvfs_trunc_max = maximum.(wvfs_trunc.signal)
-    wvfs_trunc_min = minimum.(wvfs_trunc.signal)
-    t_trunc_max = uconvert.(u"µs", flt_intersect.(wvfs_trunc, 0.99999 .* wvfs_trunc_max).x)
-    t_trunc_min = uconvert.(u"µs", flt_intersect.(wvfs_trunc, wvfs_trunc_min).x)
+    estats_trunc = extremestats.(uflt_trunc.(wvfs))
 
     # savitzky golay filter: takes derivative of waveform plus smoothing
     sgflt_savitz = SavitzkyGolayFilter(sg_window_length, sg_flt_degree, 1)
@@ -167,7 +159,7 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict
 
     # maximum finder
     intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
-    inters = intflt.(wvfs_sgflt_savitz, threshold)
+    inters = intflt.(wvfs_sgflt_savitz, n_σ_threshold .* thresholdstats.(wvfs_sgflt_savitz, min_threshold, max_threshold))
 
     # remove discharges
     # integrate derivative
@@ -183,13 +175,13 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict
     # flip around x-axis the filtered waveforms
     flipped_wf = multiply_waveform.(wvfs_der_int, -1.0)
 
-    inters_DC = intflt.(flipped_wf, threshold_DC)
+    inters_DC = intflt.(flipped_wf, n_σ_dc_threshold .* thresholdstats.(flipped_wf, min_dc_threshold, max_dc_threshold))
 
     # output Table 
     return TypedTables.Table(
         blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
-        t_max = t_max, t_min = t_min, t_max_lar = t_trunc_max, t_min_lar = t_trunc_min,
-        e_max = wvfs_max, e_min = wvfs_min, e_max_lar = wvfs_trunc_max, e_min_lar = wvfs_trunc_min,
+        t_max = uconvert.(u"µs", estats.tmax), t_min = uconvert.(u"µs", estats.tmin), t_max_lar = uconvert.(u"µs", estats_trunc.tmax), t_min_lar = uconvert.(u"µs", estats_trunc.tmin),
+        e_max = estats.max, e_min = estats.min, e_max_lar = estats_trunc.max, e_min_lar = estats_trunc.min,
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
         wfmean = sigstats.mean, wfsigma = sigstats.sigma, wfslope = sigstats.slope, wfoffset = sigstats.offset,
         trig_pos =  VectorOfVectors(inters.x), trig_max =  VectorOfVectors(inters.max),
