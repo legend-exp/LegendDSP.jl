@@ -44,14 +44,10 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
         y_high_counter = ifelse(y_is_high, y_high_counter + 1, 0)
         new_intersect_found = y_high_counter == min_n_over_thresh
         n_intersects = ifelse(new_intersect_found, n_intersects + 1, n_intersects)
-        # no_previous_intersecs = n_intersects == 1
-        # first_intersect_found = new_intersect_found && no_previous_intersecs
-        # intersect_pos = ifelse(first_intersect_found, cand_pos, intersect_pos)
-        if new_intersect_found
+        if new_intersect_found && cand_pos > firstindex(Y)
             push!(intersect_pos_arr, cand_pos)
         end
     end
-    # @assert intersect_pos > firstindex(Y)
     intersect_cand_x = zeros(R, length(intersect_pos_arr))
     # Linear interpolation:
     for (i, intersect_pos) in enumerate(intersect_pos_arr)
@@ -61,9 +57,7 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
         y_r = Y[intersect_pos]
         intersect_cand_x[i] = R(threshold - y_l) * R(x_r - x_l) / R(y_r - y_l) + R(x_l)
     end
-    # @assert  y_l <= threshold <= y_r || n_intersects == 0
     # TODO: return NaN if no intersect found but make sure it is compatible with the other routines
-    # intersect_x  = ifelse(n_intersects > 0, intersect_cand_x, zero(intersect_cand_x))
     n_intersects = ifelse(n_intersects > 0, n_intersects, 0)
     intersect_max = zeros(length(intersect_pos_arr))
     if n_intersects > 0
