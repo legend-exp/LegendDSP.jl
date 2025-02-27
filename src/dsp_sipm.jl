@@ -159,7 +159,8 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
 
     # maximum finder
     intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
-    inters = intflt.(wvfs_sgflt_savitz, n_σ_threshold .* thresholdstats.(wvfs_sgflt_savitz, min_threshold, max_threshold))
+    inters_thres = thresholdstats.(wvfs_sgflt_savitz, min_threshold, max_threshold)
+    inters = intflt.(wvfs_sgflt_savitz, n_σ_threshold .* inters_thres)
 
     # remove discharges
     # integrate derivative
@@ -174,8 +175,8 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     
     # flip around x-axis the filtered waveforms
     flipped_wf = multiply_waveform.(wvfs_der_int, -1.0)
-
-    inters_DC = intflt.(flipped_wf, n_σ_dc_threshold .* thresholdstats.(flipped_wf, min_dc_threshold, max_dc_threshold))
+    inters_thres_DC = thresholdstats.(flipped_wf, min_dc_threshold, max_dc_threshold)
+    inters_DC = intflt.(flipped_wf, n_σ_dc_threshold .* inters_thres_DC)
 
     # output Table 
     return TypedTables.Table(
@@ -184,6 +185,7 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
         e_max = estats.max, e_min = estats.min, e_max_lar = estats_trunc.max, e_min_lar = estats_trunc.min,
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
         wfmean = sigstats.mean, wfsigma = sigstats.sigma, wfslope = sigstats.slope, wfoffset = sigstats.offset,
+        threshold = inters_thres, threshold_DC = inters_thres_DC,
         trig_pos =  VectorOfVectors(inters.x), trig_max =  VectorOfVectors(inters.max),
         trig_pos_DC =  VectorOfVectors(inters_DC.x), trig_max_DC =  VectorOfVectors(inters_DC.max)
     )
