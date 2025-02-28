@@ -59,27 +59,28 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
 
     # savitzky golay filter: takes derivative of waveform plus smoothing
     sgflt_savitz = SavitzkyGolayFilter(sg_window_length, sg_flt_degree, 1)
-    wvfs_sgflt_savitz = sgflt_savitz.(wvfs)
+    wvfs = sgflt_savitz.(wvfs)
 
     # maximum finder
     intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
-    inters = intflt.(wvfs_sgflt_savitz, n_σ_threshold .* thresholdstats.(wvfs_sgflt_savitz, min_threshold, max_threshold))
+    inters_thres = thresholdstats.(wvfs, min_threshold, max_threshold)
+    inters = intflt.(wvfs, n_σ_threshold .* inters_thres)
 
     # remove discharges
     # integrate derivative
     integrator_filter = IntegratorFilter(gain=1)
-    wvfs_der_int = integrator_filter.(wvfs_sgflt_savitz)
+    wvfs = integrator_filter.(wvfs)
 
     # get blstats on derivative
-    time_min = minimum(wvfs_der_int[1].time)
-    Δt = 3*step(wvfs_der_int[1].time)
-    bl_stats = signalstats.(wvfs_der_int, Ref(time_min), ifelse.(minimum.(inters.x; init=0u"s") .< time_min + Δt, time_min + Δt, minimum.(inters.x; init=0u"s")))
-    sigstats = signalstats.(wvfs_der_int, time_min, last(wvfs_der_int[1].time))
+    time_min = minimum(wvfs[1].time)
+    Δt = 3*step(wvfs[1].time)
+    bl_stats = signalstats.(wvfs, Ref(time_min), ifelse.(minimum.(inters.x; init=0u"s") .< time_min + Δt, time_min + Δt, minimum.(inters.x; init=0u"s")))
+    sigstats = signalstats.(wvfs, time_min, last(wvfs[1].time))
     
     # flip around x-axis the filtered waveforms
-    flipped_wf = multiply_waveform.(wvfs_der_int, -1.0)
-
-    inters_DC = intflt.(flipped_wf, n_σ_dc_threshold .* thresholdstats.(flipped_wf, min_dc_threshold, max_dc_threshold))
+    wvfs = multiply_waveform.(wvfs, -1.0)
+    inters_thres_DC = thresholdstats.(wvfs, min_dc_threshold, max_dc_threshold)
+    inters_DC = intflt.(wvfs, n_σ_dc_threshold .* inters_thres_DC)
 
     # output Table 
     return TypedTables.Table(
@@ -88,6 +89,7 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
         e_max = wvfs_max, e_min = wvfs_min, e_max_lar = wvfs_trunc_max, e_min_lar = wvfs_trunc_min,
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
         wfmean = sigstats.mean, wfsigma = sigstats.sigma, wfslope = sigstats.slope, wfoffset = sigstats.offset,
+        threshold = inters_thres, threshold_DC = inters_thres_DC,
         trig_pos =  VectorOfVectors(inters.x), trig_max =  VectorOfVectors(inters.max),
         trig_pos_DC =  VectorOfVectors(inters_DC.x), trig_max_DC =  VectorOfVectors(inters_DC.max)
     )
@@ -155,27 +157,28 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
 
     # savitzky golay filter: takes derivative of waveform plus smoothing
     sgflt_savitz = SavitzkyGolayFilter(sg_window_length, sg_flt_degree, 1)
-    wvfs_sgflt_savitz = sgflt_savitz.(wvfs)
+    wvfs = sgflt_savitz.(wvfs)
 
     # maximum finder
     intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
-    inters = intflt.(wvfs_sgflt_savitz, n_σ_threshold .* thresholdstats.(wvfs_sgflt_savitz, min_threshold, max_threshold))
+    inters_thres = thresholdstats.(wvfs, min_threshold, max_threshold)
+    inters = intflt.(wvfs, n_σ_threshold .* inters_thres)
 
     # remove discharges
     # integrate derivative
     integrator_filter = IntegratorFilter(gain=1)
-    wvfs_der_int = integrator_filter.(wvfs_sgflt_savitz)
+    wvfs = integrator_filter.(wvfs)
 
     # get blstats on derivative
-    time_min = minimum(wvfs_der_int[1].time)
-    Δt = 3*step(wvfs_der_int[1].time)
-    bl_stats = signalstats.(wvfs_der_int, Ref(time_min), ifelse.(minimum.(inters.x; init=0u"s") .< time_min + Δt, time_min + Δt, minimum.(inters.x; init=0u"s")))
-    sigstats = signalstats.(wvfs_der_int, time_min, last(wvfs_der_int[1].time))
+    time_min = minimum(wvfs[1].time)
+    Δt = 3*step(wvfs[1].time)
+    bl_stats = signalstats.(wvfs, Ref(time_min), ifelse.(minimum.(inters.x; init=0u"s") .< time_min + Δt, time_min + Δt, minimum.(inters.x; init=0u"s")))
+    sigstats = signalstats.(wvfs, time_min, last(wvfs[1].time))
     
     # flip around x-axis the filtered waveforms
-    flipped_wf = multiply_waveform.(wvfs_der_int, -1.0)
-
-    inters_DC = intflt.(flipped_wf, n_σ_dc_threshold .* thresholdstats.(flipped_wf, min_dc_threshold, max_dc_threshold))
+    wvfs = multiply_waveform.(wvfs, -1.0)
+    inters_thres_DC = thresholdstats.(wvfs, min_dc_threshold, max_dc_threshold)
+    inters_DC = intflt.(wvfs, n_σ_dc_threshold .* inters_thres_DC)
 
     # output Table 
     return TypedTables.Table(
@@ -184,6 +187,7 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
         e_max = estats.max, e_min = estats.min, e_max_lar = estats_trunc.max, e_min_lar = estats_trunc.min,
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
         wfmean = sigstats.mean, wfsigma = sigstats.sigma, wfslope = sigstats.slope, wfoffset = sigstats.offset,
+        threshold = inters_thres, threshold_DC = inters_thres_DC,
         trig_pos =  VectorOfVectors(inters.x), trig_max =  VectorOfVectors(inters.max),
         trig_pos_DC =  VectorOfVectors(inters_DC.x), trig_max_DC =  VectorOfVectors(inters_DC.max)
     )
