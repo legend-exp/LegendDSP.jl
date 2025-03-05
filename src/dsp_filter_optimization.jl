@@ -49,7 +49,7 @@ function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfi
     e_rtft    = signal_estimator.(uflt_rtft.(wvfs), t50 .+ (rt + ft/2))
 
     return TypedTables.Table(
-                e = e_rtft, 
+                energy = e_rtft, 
                 blmean = bl_stats.mean, blslope = bl_stats.slope, 
                 t50 = t50,
                 qc_label = qc_labels
@@ -418,7 +418,11 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
 
         aoe_grid[w, :]     = ustrip.(current_max) ./ e_rtft
     end
-    return (aoe = aoe_grid, e = e_rtft, blmean = bl_stats.mean, blslope = bl_stats.slope, t50 = t50)
+    return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft, 
+        blmean = bl_stats.mean, blslope = bl_stats.slope, 
+        t50 = t50_pre,
+        qc_label = qc_labels
+    )
 end
 export dsp_sg_optimization
 
@@ -483,7 +487,7 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
         a_sg = get_wvf_maximum.(SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
         aoe_grid[w, :]     = ustrip.(a_sg) ./ e_rtft
     end
-    return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), e = e_rtft, 
+    return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft, 
                 blmean = bl_stats.mean, blslope = bl_stats.slope, 
                 t50 = t50_pre,
                 qc_label = qc_labels
