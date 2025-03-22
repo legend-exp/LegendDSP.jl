@@ -14,7 +14,6 @@ using ArgCheck
 using ArraysOfArrays
 using DocStringExtensions
 using FillArrays
-using FunctionChains
 using IntervalSets
 using RadiationDetectorDSP
 using RadiationDetectorSignals
