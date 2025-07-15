@@ -323,7 +323,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     t_sat_hi = data.t_sat_hi
     deadtime = data.deadtime
 
-    unique_presum_rate = only(unique(presum_rate))
+    presum_rate_value = only(unique(presum_rate))
 
     # get CUSP and ZAC filter length and flt scale
     flt_length_zac              = config.flt_length_zac
@@ -333,7 +333,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     # get number of samples the waveform is saturated at low and high of FADC range
     bit_depth = config.kwargs_pars.fc_bit_depth # of FlashCam FADC
-    sat_low, sat_high = 0, (2^bit_depth - bit_depth) * first(unique_presum_rate)
+    sat_low, sat_high = 0, (2^bit_depth - bit_depth) * first(presum_rate_value)
     sat_stats = saturation.(wvfs_pre, sat_low, sat_high)
 
     # set τ for CUSP filter to very high number to switch of CR filter
@@ -345,7 +345,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     # substract baseline from waveforms
     wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
-    wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ unique_presum_rate)
+    wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate_value)
 
     # get QC classifier labels
     qc_labels = if !ismissing(f_evaluate_qc)
@@ -434,7 +434,8 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     a_100 = get_wvf_maximum.(SavitzkyGolayFilter(100u"ns", sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
 
     # get in-trace pile-up
-    wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl * unique_presum_rate / 2, sg_flt_degree, 1).(wvfs_pre)
+    # The window length is scaled with the half presum rate to account for the fact that the waveform is presummed
+    wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl * presum_rate_value / 2, sg_flt_degree, 1).(wvfs_pre)
     inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
     
     # get position of current rise
