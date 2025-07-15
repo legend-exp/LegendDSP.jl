@@ -101,16 +101,14 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
-    # pretrace difference 
-    pretrace_diff = flatview(wvfs.signal)[1, :] - bl_stats.mean
-
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
     # get QC classifier labels
-    qc_labels = zeros(length(wvfs))
-    if !ismissing(f_evaluate_qc)
-        qc_labels = get_qc_classifier(wvfs, f_evaluate_qc)
+    qc_labels = if !ismissing(f_evaluate_qc)
+        get_qc_classifier(wvfs, f_evaluate_qc)
+    else
+        zeros(length(wvfs))
     end
     
     # get wvf maximum
@@ -230,7 +228,6 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     qdrift = qdrift, lq = lq,
     a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
-    pretrace_diff = pretrace_diff, 
     inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
     n_sat_low = sat_stats.low, n_sat_high = sat_stats.high, n_sat_low_cons = sat_stats.max_cons_low, n_sat_high_cons = sat_stats.max_cons_high
     )
@@ -326,7 +323,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     t_sat_hi = data.t_sat_hi
     deadtime = data.deadtime
 
-    @assert length(unique(presum_rate)) == 1 "Presum rate is not unique"
+    unique_presum_rate = only(unique(presum_rate))
 
     # get CUSP and ZAC filter length and flt scale
     flt_length_zac              = config.flt_length_zac
@@ -336,7 +333,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     # get number of samples the waveform is saturated at low and high of FADC range
     bit_depth = config.kwargs_pars.fc_bit_depth # of FlashCam FADC
-    sat_low, sat_high = 0, (2^bit_depth - bit_depth) * first(presum_rate)
+    sat_low, sat_high = 0, (2^bit_depth - bit_depth) * first(unique_presum_rate)
     sat_stats = saturation.(wvfs_pre, sat_low, sat_high)
 
     # set τ for CUSP filter to very high number to switch of CR filter
@@ -348,15 +345,13 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     # substract baseline from waveforms
     wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
-    wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate)
-
-    # pretrace difference 
-    # pretrace_diff = flatview(wvfs_wdw.signal)[1, :] - bl_stats.mean ./ presum_rate
+    wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ unique_presum_rate)
 
     # get QC classifier labels
-    qc_labels = zeros(length(wvfs_pre))
-    if !ismissing(f_evaluate_qc)
-        qc_labels = get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)
+    qc_labels = if !ismissing(f_evaluate_qc)
+        get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)
+    else
+        zeros(length(wvfs_pre))
     end
     
     # get wvf maximum
@@ -439,7 +434,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     a_100 = get_wvf_maximum.(SavitzkyGolayFilter(100u"ns", sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
 
     # get in-trace pile-up
-    wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs_pre)
+    wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl * unique_presum_rate / 2, sg_flt_degree, 1).(wvfs_pre)
     inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
     
     # get position of current rise
@@ -478,7 +473,6 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     qdrift = qdrift, lq = lq,
     a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc, deadtime = deadtime,
-    # pretrace_diff = pretrace_diff, 
     inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
     n_sat_low = sat_stats.low, n_sat_high = sat_stats.high, n_sat_low_cons = sat_stats.max_cons_low, n_sat_high_cons = sat_stats.max_cons_high,
     t_sat_lo = t_sat_lo, t_sat_hi = t_sat_hi
