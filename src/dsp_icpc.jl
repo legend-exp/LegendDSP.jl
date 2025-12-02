@@ -311,9 +311,13 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     zac_rt, zac_ft = get_fltpars(pars_filter, :zac, config)
     sg_wl   = get_fltpars(pars_filter, :sg, config)
 
-    # get waveform data 
-    wvfs_pre = decode_data(data.waveform_presummed)
-    wvfs_wdw = decode_data(data.waveform_windowed)
+    # get waveform data - convert from Table and then apply decode_data
+    wvfs_pre = LegendHDF5IO.from_table(data.waveform_presummed, AbstractVector{<:RDWaveform})
+    wvfs_pre = decode_data(wvfs_pre)
+    
+    wvfs_wdw = LegendHDF5IO.from_table(data.waveform_windowed, AbstractVector{<:RDWaveform})
+    wvfs_wdw = decode_data(wvfs_wdw)
+    
     presum_rate = data.presum_rate
     blfc = data.baseline
     ts   = data.timestamp

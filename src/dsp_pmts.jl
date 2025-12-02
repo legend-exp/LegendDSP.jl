@@ -14,8 +14,10 @@ function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     saturation_limit_high = config.saturation_limit_high
     saturation_limit_low  = config.saturation_limit_low
 
-    # get waveform data 
-    waveform = decode_data(data.waveform)
+    # get waveform data - convert from Table and then apply decode_data
+    waveform_data = data.waveform
+    waveform = LegendHDF5IO.from_table(waveform_data, AbstractVector{<:RDWaveform})
+    waveform = decode_data(waveform)
     ts  = data.timestamp
     ch  = data.channel
     evID = data.eventnumber

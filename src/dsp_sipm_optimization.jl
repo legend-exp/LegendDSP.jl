@@ -17,7 +17,8 @@ function dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, sg_window_l
     # get dsp meta parameters
     sg_flt_degree = config.sg_flt_degree
 
-    # get waveform data 
+    # get waveform data - convert from Table and then apply decode_data
+    #wvfs = LegendHDF5IO.from_table(wvfs, AbstractVector{<:RDWaveform})
     wvfs = decode_data(wvfs)
 
     # shift waveform by 0 to get Float64 conversation --> ToDO: check if this is necessary
@@ -76,7 +77,8 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
     
     n_wvfs_threshold = min(length(wvfs), optimization_config.threshold.n_wvfs)  
     
-    # get waveform data 
+    # get waveform data - convert from Table and then apply decode_data
+    #wvfs = LegendHDF5IO.from_table(wvfs, AbstractVector{<:RDWaveform})
     wvfs = decode_data(wvfs)
 
     # shift waveform by 0 to get Float64 conversation --> ToDO: check if this is necessary
@@ -114,7 +116,6 @@ end
 function dsp_sg_sipm_optimization_compressed(n_max_wvfs::Int, wvfs::ArrayOfRDWaveforms, dsp_config::PropDict, optimization_config::PropDict)
     # get dsp meta parameters
     e_grid_wl = optimization_config.e_grid_wl
-
     # flatten over waveform partitions
     dsp_grid = LegendDataTypes.fast_flatten([let dsp_part = dsp_sg_sipm_optimization_compressed(wf, dsp_config, optimization_config)
         TypedTables.Table(merge(NamedTuple{Tuple(Symbol.(e_grid_wl))}(dsp_part.trig_max_grid...), (thresholds = dsp_part.thresholds_grid, )))
