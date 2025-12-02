@@ -17,12 +17,15 @@ using FillArrays
 using IntervalSets
 using RadiationDetectorDSP
 using RadiationDetectorSignals
+using StructArrays
 using Unitful
 using PropDicts
 using Tables
 using TypedTables
 using LIBSVM
 using LegendDataTypes
+using LegendHDF5IO
+using StructArrays
 
 import Adapt
 import RadiationDetectorDSP: fltinstance, rdfilt!, flt_output_length, 
