@@ -135,8 +135,8 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     max_dc_threshold      = config.max_dc_threshold
     n_σ_dc_threshold      = config.n_σ_dc_threshold
 
-    # unpack optimization parameters - extract numerical value from PropDict  
-    sg_window_length = haskey(pars_optimization.sg.wl, :val) ? pars_optimization.sg.wl.val : pars_optimization.sg.wl
+    # unpack optimization parameters
+    sg_window_length = pars_optimization.sg.wl
 
     # get waveform data 
     wvfs = decode_data(data.waveform_bit_drop)
