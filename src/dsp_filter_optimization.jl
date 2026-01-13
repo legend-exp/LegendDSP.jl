@@ -438,7 +438,7 @@ Optimize the Savitzky-Golay filter parameters for a given waveform set.
     - `blmean`: Baseline mean value
     - `blslope`: Baseline slope value
 """
-function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::AbstractFloat=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
+function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
     # get config parameters
     bl_window      = config.bl_window
     a_grid_wl_sg   = config.a_grid_wl_sg
