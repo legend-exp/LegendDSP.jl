@@ -1,3 +1,4 @@
+# This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
     dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict)
@@ -137,10 +138,8 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     # unpack optimization parameters - extract numerical value from PropDict  
     sg_window_length = haskey(pars_optimization.sg.wl, :val) ? pars_optimization.sg.wl.val : pars_optimization.sg.wl
 
-    # get waveform data - convert from Table and then apply decode_data
-    waveform_data = data.waveform_bit_drop
-    wvfs = LegendHDF5IO.from_table(waveform_data, AbstractVector{<:RDWaveform})
-    wvfs = decode_data(wvfs)
+    # get waveform data 
+    wvfs = decode_data(data.waveform_bit_drop)
     blfc = data.baseline
     ts   = data.timestamp
     evID = data.eventnumber

@@ -17,8 +17,7 @@ function dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, sg_window_l
     # get dsp meta parameters
     sg_flt_degree = config.sg_flt_degree
 
-    # get waveform data - convert from Table and then apply decode_data
-    #wvfs = LegendHDF5IO.from_table(wvfs, AbstractVector{<:RDWaveform})
+    # get waveform data 
     wvfs = decode_data(wvfs)
 
     # shift waveform by 0 to get Float64 conversation --> ToDO: check if this is necessary

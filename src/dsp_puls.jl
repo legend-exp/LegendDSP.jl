@@ -99,10 +99,8 @@ function dsp_puls_compressed(data::Q, config::DSPConfig) where {Q <: Table}
     # get config parameters
     bl_window = config.bl_window
 
-    # get waveform data - convert from Table and then apply decode_data
-    waveform_data = data.waveform_presummed
-    wvfs = LegendHDF5IO.from_table(waveform_data, AbstractVector{<:RDWaveform})
-    wvfs = decode_data(wvfs)
+    # get waveform data 
+    wvfs = decode_data(data.waveform_presummed)
     blfc = data.baseline
     ts   = data.timestamp
     evID = data.eventnumber
