@@ -76,8 +76,6 @@ function dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_confi
     
     n_wvfs_threshold = min(length(wvfs), optimization_config.threshold.n_wvfs)  
     
-    # get waveform data - convert from Table and then apply decode_data
-    #wvfs = LegendHDF5IO.from_table(wvfs, AbstractVector{<:RDWaveform})
     wvfs = decode_data(wvfs)
 
     # shift waveform by 0 to get Float64 conversation --> ToDO: check if this is necessary

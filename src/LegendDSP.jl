@@ -24,7 +24,6 @@ using Tables
 using TypedTables
 using LIBSVM
 using LegendDataTypes
-using LegendHDF5IO
 
 import Adapt
 import RadiationDetectorDSP: fltinstance, rdfilt!, flt_output_length, 
