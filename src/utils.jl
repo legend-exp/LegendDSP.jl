@@ -53,6 +53,14 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         # window length grid scan range for SG filter in current determination
         dsp_metadata.a_grid_wl_sg.start:dsp_metadata.a_grid_wl_sg.step:dsp_metadata.a_grid_wl_sg.stop,
         
+        # auxiliary baseline windows
+        dsp_metadata.auxbl1_window.min .. dsp_metadata.auxbl1_window.max,
+        dsp_metadata.auxbl2_window.min .. dsp_metadata.auxbl2_window.max,
+
+        # automatically selected filter parameters
+        dsp_metadata.flat_top_time_auto,
+        dsp_metadata.sg_length_auto,
+
         # flt defaults
         dsp_metadata.flt_defaults,
         

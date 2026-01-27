@@ -83,6 +83,14 @@ struct DSPConfig{T <: Real}
 
     # additional pars
     kwargs_pars::PropDict
+
+    # auxiliary baseline windows
+    auxbl1_window::ClosedInterval{<:Quantity{<:T}}
+    auxbl2_window::ClosedInterval{<:Quantity{<:T}}
+
+    # automatically selected filter parameters
+    flat_top_time_auto::Quantity{<:T}
+    sg_length_auto::Quantity{<:T}
 end
 export DSPConfig
 
