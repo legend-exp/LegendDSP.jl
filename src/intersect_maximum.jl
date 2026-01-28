@@ -62,15 +62,15 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
     intersect_max = zeros(length(intersect_pos_arr))
     if n_intersects > 0
         for (i, intersect_pos) in enumerate(intersect_pos_arr)
-            from = intersect_pos - 2
-            until = intersect_pos + max_n_for_max
+            from = max(intersect_pos - 2, firstindex(Y))
+            until = min(intersect_pos + max_n_for_max, lastindex(Y))
             idxs = from:until
             @inbounds begin
                 ind_max = argmax(Y[idxs])
-                if 2 < ind_max < length(X) - 1
+                if 1 < ind_max < length(idxs)
                     intersect_max[i] = extrema3points(view(Y[idxs], ind_max-1:ind_max+1)...)
                 else
-                    intersect_max[i] = Y[ind_max]
+                    intersect_max[i] = Y[idxs][ind_max]
                 end
             end
         end

@@ -1,26 +1,26 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
+    dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real})
 
 Get QC DSP for filter parameter optimization for a given waveform set.
 """
-function dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
-    _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier, f_evaluate_qc))
+function dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real})
+    _get_dsp_qc_flt_optimization(wvfs, config, τ)
 end
 export dsp_qc_flt_optimization
 
 """
-    dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
+    dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real})
 
 Get QC DSP for filter parameter optimization for a given waveform set.
 """
-function dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function) 
-    _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier_compressed, f_evaluate_qc))
+function dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}) 
+    _get_dsp_qc_flt_optimization(wvfs, config, τ)
 end
 export dsp_qc_flt_optimization_compressed
 
-function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, get_qc::Function)
+function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real})
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
 
@@ -37,9 +37,6 @@ function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfi
     # t50 determination
     t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
 
-    # get QC classifier labels
-    qc_labels = get_qc(wvfs)
-
     # get default filter parameters
     rt = config.default_flt_param.trap.rt
     ft = config.default_flt_param.trap.ft
@@ -51,8 +48,7 @@ function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfi
     return TypedTables.Table(
                 energy = e_rtft, 
                 blmean = bl_stats.mean, blslope = bl_stats.slope, 
-                t50 = t50,
-                qc_label = qc_labels
+                t50 = t50
             )
 end
 
@@ -420,8 +416,7 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     end
     return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft, 
         blmean = bl_stats.mean, blslope = bl_stats.slope, 
-        t50 = t50_pre,
-        qc_label = qc_labels
+        t50 = t50
     )
 end
 export dsp_sg_optimization
@@ -438,7 +433,7 @@ Optimize the Savitzky-Golay filter parameters for a given waveform set.
     - `blmean`: Baseline mean value
     - `blslope`: Baseline slope value
 """
-function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
+function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8)) where T<:Real
     # get config parameters
     bl_window      = config.bl_window
     a_grid_wl_sg   = config.a_grid_wl_sg
@@ -455,12 +450,6 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
     # substract baseline from waveforms
     wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
     wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate)
-
-    # get QC classifier labels
-    qc_labels = zeros(length(wvfs_pre))
-    if !ismissing(f_evaluate_qc)
-        qc_labels = get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)
-    end
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
@@ -489,8 +478,7 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
     end
     return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft, 
                 blmean = bl_stats.mean, blslope = bl_stats.slope, 
-                t50 = t50_pre,
-                qc_label = qc_labels
+                t50 = t50_pre
                 )
 end
 export dsp_sg_optimization_compressed
