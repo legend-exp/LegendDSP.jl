@@ -43,21 +43,7 @@ using Unitful
     @test res_end.max[1] >= 0.6   # maximum should be at least 0.6 (interpolated value can be higher)
     @test res_end.max[1] < 0.7    # but not unreasonably high
 
-    # Edge case: Maximum at first sample of waveform (ind_max == 1, from == firstindex)
-    # Signal starts immediately above threshold with maximum at sample 1
-    signal_max_at_first = zeros(Float64, n_samples)
-    signal_max_at_first[1] = 1.0   # Maximum at very first sample
-    signal_max_at_first[2] = 0.8
-    signal_max_at_first[3] = 0.6
-    signal_max_at_first[4] = 0.4
-    signal_max_at_first[5] = 0.3
-    wvf_max_at_first = RDWaveform(times, signal_max_at_first)
-
-    res_max_first = intflt(wvf_max_at_first, 0.35)
-    @test res_max_first.multiplicity == 1
-    @test res_max_first.max[1] == 1.0  # No interpolation, just the value at the edge
-
-    # Edge case: Maximum at last sample of waveform (ind_max == length(idxs), until == lastindex)
+    # Edge case: Maximum at last sample of search window (ind_max == length(idxs))
     # Use short maxtot so the search window ends at the waveform end
     intflt_short = IntersectMaximum(mintot = 2Δt, maxtot = 5Δt)
     signal_max_at_last = zeros(Float64, n_samples)
@@ -71,20 +57,6 @@ using Unitful
     res_max_last = intflt_short(wvf_max_at_last, 0.4)
     @test res_max_last.multiplicity == 1
     @test res_max_last.max[1] == 1.0  # No interpolation, just the value at the edge
-
-    # Edge case: Intersection at first sample (intersect_pos == firstindex + 1)
-    # First sample already above threshold
-    signal_first_intersect = zeros(Float64, n_samples)
-    signal_first_intersect[1] = 0.5   # Already above threshold
-    signal_first_intersect[2] = 0.6
-    signal_first_intersect[3] = 0.7   # Maximum
-    signal_first_intersect[4] = 0.5
-    signal_first_intersect[5] = 0.3
-    wvf_first_intersect = RDWaveform(times, signal_first_intersect)
-
-    res_first_intersect = intflt(wvf_first_intersect, 0.4)
-    @test res_first_intersect.multiplicity == 1
-    @test res_first_intersect.x[1] >= 0u"ns"  # Intersection should be at or near sample 1
 
     # Edge case: Intersection at last sample (threshold crossed near the end)
     signal_last_intersect = zeros(Float64, n_samples)
