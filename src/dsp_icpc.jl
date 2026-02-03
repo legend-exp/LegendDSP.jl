@@ -369,6 +369,9 @@ function dsp_ged_auto(data::Q, config::DSPConfig, τ::Quantity{T}) where {Q<:Tab
     # tail parameter determination
     tail_stats = signalstats.(wvfs_pre, leftendpoint(tail_window), rightendpoint(tail_window))
 
+    auxpz1_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz1_window), rightendpoint(config.auxpz1_window))
+    auxpz2_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz2_window), rightendpoint(config.auxpz2_window))
+
     # time point determination
     t0 = get_t0(wvfs_wdw, t0_threshold; flt_pars=config.kwargs_pars.t0_flt_pars, mintot=config.kwargs_pars.t0_mintot)
     t10 = get_threshold(wvfs_wdw, wvf_wdw_stats.max .* 0.1; mintot=config.kwargs_pars.tx_mintot)
@@ -441,6 +444,9 @@ function dsp_ged_auto(data::Q, config::DSPConfig, τ::Quantity{T}) where {Q<:Tab
         tail_τ=decay_stats.τ, tail_mean=decay_stats.mean, tail_sigma=decay_stats.sigma,
         # tail parameters
         tailmean=tail_stats.mean, tailsigma=tail_stats.sigma, tailslope=tail_stats.slope, tailoffset=tail_stats.offset,
+        # auxiliary pz parameters
+        auxpz1_mean=auxpz1_stats.mean, auxpz1_sigma=auxpz1_stats.sigma,
+        auxpz2_mean=auxpz2_stats.mean, auxpz2_sigma=auxpz2_stats.sigma,
         # time points
         t0=t0, t10=t10, t50=t50, t80=t80, t90=t90, t50_pre=t50_pre, # t50_current = t50_current, 
         # drift time

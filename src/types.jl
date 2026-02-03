@@ -89,8 +89,12 @@ struct DSPConfig{T <: Real}
     auxbl2_window::ClosedInterval{<:Quantity{<:T}}
 
     # automatically selected filter parameters
+    rise_time_auto::Quantity{<:T}
     flat_top_time_auto::Quantity{<:T}
     sg_length_auto::Quantity{<:T}
+
+    auxpz1_window::ClosedInterval{<:Quantity{<:T}}
+    auxpz2_window::ClosedInterval{<:Quantity{<:T}}
 end
 export DSPConfig
 
