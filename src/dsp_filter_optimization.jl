@@ -8,6 +8,9 @@ Get QC DSP for filter parameter optimization for a given waveform set.
 function dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
     _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier, f_evaluate_qc))
 end
+function dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real})
+    _get_dsp_qc_flt_optimization(wvfs, config, τ, missing)
+end
 export dsp_qc_flt_optimization
 
 """
@@ -18,9 +21,12 @@ Get QC DSP for filter parameter optimization for a given waveform set.
 function dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function) 
     _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier_compressed, f_evaluate_qc))
 end
+function dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}) 
+    _get_dsp_qc_flt_optimization(wvfs, config, τ, missing)
+end
 export dsp_qc_flt_optimization_compressed
 
-function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, get_qc::Function)
+function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, get_qc::Union{Function, Missing})
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
 
@@ -36,9 +42,9 @@ function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfi
 
     # t50 determination
     t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
-
-    # get QC classifier labels
-    qc_labels = get_qc(wvfs)
+   
+    # get QC classifier labels (0 if no f_evaluate_qc provided)
+    qc_labels = ismissing(get_qc) ? zeros(length(wvfs)) : get_qc(wvfs)
 
     # get default filter parameters
     rt = config.default_flt_param.trap.rt
@@ -456,11 +462,8 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
     wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
     wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate)
 
-    # get QC classifier labels
-    qc_labels = zeros(length(wvfs_pre))
-    if !ismissing(f_evaluate_qc)
-        qc_labels = get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)
-    end
+    # get QC classifier labels (0 if no f_evaluate_qc provided)
+    qc_labels = ismissing(f_evaluate_qc) ? zeros(length(wvfs_pre)) : get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
