@@ -26,8 +26,10 @@ The output data is a table with the following columns:
 """
 function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # get dsp meta parameters
-    min_tot_intersect     = config.min_tot_intersect
-    max_tot_intersect     = config.max_tot_intersect
+    min_tot_intersect_cal = config.min_tot_intersect_cal
+    max_tot_intersect_cal = config.max_tot_intersect_cal
+    min_tot_intersect_phy = config.min_tot_intersect_phy
+    max_tot_intersect_phy = config.max_tot_intersect_phy
     sg_flt_degree         = config.sg_flt_degree
     t0_hpge_window        = config.t0_hpge_window
     min_threshold         = config.min_threshold
@@ -62,9 +64,11 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     wvfs = sgflt_savitz.(wvfs)
 
     # maximum finder
-    intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
+    intflt_cal = IntersectMaximum(min_tot_intersect_cal, max_tot_intersect_cal)
+    intflt_phy = IntersectMaximum(min_tot_intersect_phy, max_tot_intersect_phy)
     inters_thres = thresholdstats.(wvfs, min_threshold, max_threshold)
-    inters = intflt.(wvfs, n_σ_threshold .* inters_thres)
+    inters_cal = intflt_cal.(wvfs, n_σ_threshold .* inters_thres)
+    inters_phy = intflt_phy.(wvfs, n_σ_threshold .* inters_thres)
 
     # remove discharges
     # integrate derivative
@@ -74,13 +78,14 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     # get blstats on derivative
     time_min = minimum(wvfs[1].time)
     Δt = 3*step(wvfs[1].time)
-    bl_stats = signalstats.(wvfs, Ref(time_min), ifelse.(minimum.(inters.x; init=0u"s") .< time_min + Δt, time_min + Δt, minimum.(inters.x; init=0u"s")))
+    bl_stats = signalstats.(wvfs, Ref(time_min), ifelse.(minimum.(inters_phy.x; init=0u"s") .< time_min + Δt, time_min + Δt, minimum.(inters_phy.x; init=0u"s")))
     sigstats = signalstats.(wvfs, time_min, last(wvfs[1].time))
     
     # flip around x-axis the filtered waveforms
     wvfs = multiply_waveform.(wvfs, -1.0)
     inters_thres_DC = thresholdstats.(wvfs, min_dc_threshold, max_dc_threshold)
-    inters_DC = intflt.(wvfs, n_σ_dc_threshold .* inters_thres_DC)
+    inters_DC_cal = intflt_cal.(wvfs, n_σ_dc_threshold .* inters_thres_DC)
+    inters_DC_phy = intflt_phy.(wvfs, n_σ_dc_threshold .* inters_thres_DC)
 
     # output Table 
     return TypedTables.Table(
@@ -90,8 +95,10 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
         wfmean = sigstats.mean, wfsigma = sigstats.sigma, wfslope = sigstats.slope, wfoffset = sigstats.offset,
         threshold = inters_thres, threshold_DC = inters_thres_DC,
-        trig_pos =  VectorOfVectors(inters.x), trig_max =  VectorOfVectors(inters.max),
-        trig_pos_DC =  VectorOfVectors(inters_DC.x), trig_max_DC =  VectorOfVectors(inters_DC.max)
+        trig_pos_cal = VectorOfVectors(inters_cal.x), trig_max_cal = VectorOfVectors(inters_cal.max),
+        trig_pos_phy = VectorOfVectors(inters_phy.x), trig_max_phy = VectorOfVectors(inters_phy.max),
+        trig_pos_DC_cal = VectorOfVectors(inters_DC_cal.x), trig_max_DC_cal = VectorOfVectors(inters_DC_cal.max),
+        trig_pos_DC_phy = VectorOfVectors(inters_DC_phy.x), trig_max_DC_phy = VectorOfVectors(inters_DC_phy.max)
     )
 end
 export dsp_sipm
@@ -124,8 +131,10 @@ The output data is a table with the following columns:
 """
 function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # get dsp meta parameters
-    min_tot_intersect     = config.min_tot_intersect
-    max_tot_intersect     = config.max_tot_intersect
+    min_tot_intersect_cal = config.min_tot_intersect_cal
+    max_tot_intersect_cal = config.max_tot_intersect_cal
+    min_tot_intersect_phy = config.min_tot_intersect_phy
+    max_tot_intersect_phy = config.max_tot_intersect_phy
     sg_flt_degree         = config.sg_flt_degree
     t0_hpge_window        = config.t0_hpge_window
     min_threshold         = config.min_threshold
@@ -160,9 +169,11 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     wvfs = sgflt_savitz.(wvfs)
 
     # maximum finder
-    intflt = IntersectMaximum(min_tot_intersect, max_tot_intersect)
+    intflt_cal = IntersectMaximum(min_tot_intersect_cal, max_tot_intersect_cal)
+    intflt_phy = IntersectMaximum(min_tot_intersect_phy, max_tot_intersect_phy)
     inters_thres = thresholdstats.(wvfs, min_threshold, max_threshold)
-    inters = intflt.(wvfs, n_σ_threshold .* inters_thres)
+    inters_cal = intflt_cal.(wvfs, n_σ_threshold .* inters_thres)
+    inters_phy = intflt_phy.(wvfs, n_σ_threshold .* inters_thres)
 
     # remove discharges
     # integrate derivative
@@ -172,13 +183,14 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     # get blstats on derivative
     time_min = minimum(wvfs[1].time)
     Δt = 3*step(wvfs[1].time)
-    bl_stats = signalstats.(wvfs, Ref(time_min), ifelse.(minimum.(inters.x; init=0u"s") .< time_min + Δt, time_min + Δt, minimum.(inters.x; init=0u"s")))
+    bl_stats = signalstats.(wvfs, Ref(time_min), ifelse.(minimum.(inters_phy.x; init=0u"s") .< time_min + Δt, time_min + Δt, minimum.(inters_phy.x; init=0u"s")))
     sigstats = signalstats.(wvfs, time_min, last(wvfs[1].time))
     
     # flip around x-axis the filtered waveforms
     wvfs = multiply_waveform.(wvfs, -1.0)
     inters_thres_DC = thresholdstats.(wvfs, min_dc_threshold, max_dc_threshold)
-    inters_DC = intflt.(wvfs, n_σ_dc_threshold .* inters_thres_DC)
+    inters_DC_cal = intflt_cal.(wvfs, n_σ_dc_threshold .* inters_thres_DC)
+    inters_DC_phy = intflt_phy.(wvfs, n_σ_dc_threshold .* inters_thres_DC)
 
     # output Table 
     return TypedTables.Table(
@@ -188,8 +200,10 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
         wfmean = sigstats.mean, wfsigma = sigstats.sigma, wfslope = sigstats.slope, wfoffset = sigstats.offset,
         threshold = inters_thres, threshold_DC = inters_thres_DC,
-        trig_pos =  VectorOfVectors(inters.x), trig_max =  VectorOfVectors(inters.max),
-        trig_pos_DC =  VectorOfVectors(inters_DC.x), trig_max_DC =  VectorOfVectors(inters_DC.max)
+        trig_pos_cal = VectorOfVectors(inters_cal.x), trig_max_cal = VectorOfVectors(inters_cal.max),
+        trig_pos_phy = VectorOfVectors(inters_phy.x), trig_max_phy = VectorOfVectors(inters_phy.max),
+        trig_pos_DC_cal = VectorOfVectors(inters_DC_cal.x), trig_max_DC_cal = VectorOfVectors(inters_DC_cal.max),
+        trig_pos_DC_phy = VectorOfVectors(inters_DC_phy.x), trig_max_DC_phy = VectorOfVectors(inters_DC_phy.max)
     )
 end
 export dsp_sipm_compressed
