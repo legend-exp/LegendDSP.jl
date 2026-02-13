@@ -433,10 +433,10 @@ function dsp_ged_auto(data::Q, config::DSPConfig, τ::Quantity{T}) where {Q<:Tab
         n_sat_low=sat_stats.low, n_sat_high=sat_stats.high, n_sat_low_cons=sat_stats.max_cons_low, n_sat_high_cons=sat_stats.max_cons_high,
         t_sat_lo=t_sat_lo, t_sat_hi=t_sat_hi,
         # baseline
-        blmean=bl_stats.mean, blsigma=bl_stats.sigma, blslope=bl_stats.slope, bloffset=bl_stats.offset,
+        blmean=bl_stats.mean, blsigma=bl_stats.sigma, blslope=bl_stats.slope, bloffset=bl_stats.offset, bl_sigma_2 = bl_stats.sigma_2,
         # auxiliary baselines
-        auxbl1_mean=auxbl1_stats.mean, auxbl1_sigma=auxbl1_stats.sigma,
-        auxbl2_mean=auxbl2_stats.mean, auxbl2_sigma=auxbl2_stats.sigma,
+        auxbl1_mean=auxbl1_stats.mean, auxbl1_sigma=auxbl1_stats.sigma, auxbl1_sigma_2=auxbl1_stats.sigma_2,
+        auxbl2_mean=auxbl2_stats.mean, auxbl2_sigma=auxbl2_stats.sigma, auxbl2_sigma_2=auxbl2_stats.sigma_2,
         # waveform extrema
         e_max=wvf_pre_stats.max, e_min=wvf_pre_stats.min, wvf_pre_tmax=wvf_pre_stats.tmax, wvf_pre_tmin=wvf_pre_stats.tmin,
         wvf_wdw_max=wvf_wdw_stats.max, wvf_wdw_min=wvf_wdw_stats.min, wvf_wdw_tmax=wvf_wdw_stats.tmax, wvf_wdw_tmin=wvf_wdw_stats.tmin,
@@ -445,8 +445,8 @@ function dsp_ged_auto(data::Q, config::DSPConfig, τ::Quantity{T}) where {Q<:Tab
         # tail parameters
         tailmean=tail_stats.mean, tailsigma=tail_stats.sigma, tailslope=tail_stats.slope, tailoffset=tail_stats.offset,
         # auxiliary pz parameters
-        auxpz1_mean=auxpz1_stats.mean, auxpz1_sigma=auxpz1_stats.sigma,
-        auxpz2_mean=auxpz2_stats.mean, auxpz2_sigma=auxpz2_stats.sigma,
+        auxpz1_mean=auxpz1_stats.mean, auxpz1_sigma=auxpz1_stats.sigma, auxpz1_sigma_2=auxpz1_stats.sigma_2,
+        auxpz2_mean=auxpz2_stats.mean, auxpz2_sigma=auxpz2_stats.sigma, auxpz2_sigma_2=auxpz2_stats.sigma_2,
         # time points
         t0=t0, t10=t10, t50=t50, t80=t80, t90=t90, t50_pre=t50_pre, # t50_current = t50_current, 
         # drift time
