@@ -297,6 +297,8 @@ The output data is a table with the following columns:
 function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where {Q <: Table, T<:Real}
     # get config parameters
     bl_window                = config.bl_window
+    auxbl1_window            = config.auxbl1_window
+    auxbl2_window            = config.auxbl2_window
     t0_threshold             = config.t0_threshold
     tail_window              = config.tail_window
     inTraceCut_std_threshold = config.inTraceCut_std_threshold
@@ -336,6 +338,10 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     sat_low, sat_high = 0, (2^bit_depth - bit_depth) * first(presum_rate_value)
     sat_stats = saturation.(wvfs_pre, sat_low, sat_high)
 
+    # auxiliary baseline determination
+    auxbl1_stats = signalstats.(wvfs_pre, leftendpoint(auxbl1_window), rightendpoint(auxbl1_window))
+    auxbl2_stats = signalstats.(wvfs_pre, leftendpoint(auxbl2_window), rightendpoint(auxbl2_window))
+
     # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
     τ_zac = 10000000.0u"µs"
@@ -363,6 +369,9 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     # extract decay times
     tail_stats = tailstats.(wvfs_pre, leftendpoint(tail_window), rightendpoint(tail_window))
+
+    auxpz1_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz1_window), rightendpoint(config.auxpz1_window))
+    auxpz2_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz2_window), rightendpoint(config.auxpz2_window))
 
     # deconvolute waveform 
     # --> wvfs = wvfs_pz
@@ -457,26 +466,43 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     t0_inv = get_t0(wvfs_wdw, t0_threshold; mintot=config.kwargs_pars.t0_mintot)
 
     # output Table 
-    return TypedTables.Table(blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
-    tailmean = pz_stats.mean, tailsigma = pz_stats.sigma, tailslope = pz_stats.slope, tailoffset = pz_stats.offset,
-    qc_label = qc_labels,
-    t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99, t50_pre = t50_pre,
-    t50_current = t50_current, 
-    drift_time = drift_time,
-    tail_τ = tail_stats.τ, tail_mean = tail_stats.mean, tail_sigma = tail_stats.sigma,
-    e_max = wvf_max_wdw, e_min = wvf_min_wdw, e_max_pre = wvf_max_pre, e_min_pre = wvf_min_pre,
-    e_10410 = e_10410, e_535 = e_535, e_313 = e_313,
-    e_10410_inv = e_10410_max_inv, e_313_inv = e_313_max_inv,
-    t0_inv = t0_inv,
-    e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
-    e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
-    t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
-    qdrift = qdrift, lq = lq,
-    a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
-    blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc, deadtime = deadtime,
-    inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
-    n_sat_low = sat_stats.low, n_sat_high = sat_stats.high, n_sat_low_cons = sat_stats.max_cons_low, n_sat_high_cons = sat_stats.max_cons_high,
-    t_sat_lo = t_sat_lo, t_sat_hi = t_sat_hi
+    return TypedTables.Table(
+        # fadc parameters
+        blfc=blfc, timestamp=ts, eventID_fadc=evID, e_fc=efc, deadtime=deadtime,
+        # saturation parameters 
+        n_sat_low=sat_stats.low, n_sat_high=sat_stats.high, n_sat_low_cons=sat_stats.max_cons_low, n_sat_high_cons=sat_stats.max_cons_high,
+        t_sat_lo=t_sat_lo, t_sat_hi=t_sat_hi,
+        # baseline 
+        blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, bl_sigma_2 = bl_stats.sigma_2,
+        # aux baselines
+        auxbl1_mean = auxbl1_stats.mean, auxbl1_sigma = auxbl1_stats.sigma, auxbl1_sigma_2 = auxbl1_stats.sigma_2,
+        auxbl2_mean = auxbl2_stats.mean, auxbl2_sigma = auxbl2_stats.sigma, auxbl2_sigma_2 = auxbl2_stats.sigma_2,
+        # ML QC label
+        qc_label = qc_labels,
+        # waveform extrema 
+        e_max = wvf_max_wdw, e_min = wvf_min_wdw, e_max_pre = wvf_max_pre, e_min_pre = wvf_min_pre,
+        # tail parameters
+        tailmean = pz_stats.mean, tailsigma = pz_stats.sigma, tailslope = pz_stats.slope, tailoffset = pz_stats.offset,
+        tail_τ = tail_stats.τ, tail_mean = tail_stats.mean, tail_sigma = tail_stats.sigma,
+        # auxiliary pz parameters
+        auxpz1_mean = auxpz1_stats.mean, auxpz1_sigma = auxpz1_stats.sigma, auxpz1_sigma_2 = auxpz1_stats.sigma_2,
+        auxpz2_mean = auxpz2_stats.mean, auxpz2_sigma = auxpz2_stats.sigma, auxpz2_sigma_2 = auxpz2_stats.sigma_2,
+        # timing parameters
+        t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99, t50_pre = t50_pre,
+        drift_time = drift_time, t50_current = t50_current,
+        # energies (fixed and trap/cusp/zac) & extrema of trap/cusp/zac 
+        e_10410 = e_10410, e_535 = e_535, e_313 = e_313,
+        e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
+        e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
+        t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
+        # Qdrift & LQ
+        qdrift = qdrift, lq = lq,
+        # currents & Pileup
+        a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
+        inTrace_intersect = inTrace_pileUp.intersect,
+        # inverse parameters
+        e_10410_inv = e_10410_max_inv, e_313_inv = e_313_max_inv,
+        t0_inv = t0_inv,
     )
 end
 export dsp_icpc_compressed
