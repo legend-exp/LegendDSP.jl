@@ -14,7 +14,7 @@ signal = vcat(zeros(n), 10*ones(n)) + (noise*rand(2*n) .- noise/2)
 wf = RDWaveform(t, signal)
 
 # define filter parameters and filter
-flt = WeightedSavitzkyGolayFilter(length=1u"μs", degree=3, weightType=2)
+flt = WeightedSavitzkyGolayFilter(length=1u"μs", degree=3, weightType=2, derivative=1)
 
 # apply filter to signal
 wf_new = flt(wf)
@@ -39,12 +39,17 @@ Base.@kwdef struct WeightedSavitzkyGolayFilter{T<:RealQuantity} <: AbstractRadFI
     "weight function to use"
     weightType::Int = 0
 
+    "n-th derivative (0 for no derivative, 1 for first derivative)"
+    derivative::Int = 0
+
     function WeightedSavitzkyGolayFilter(length::T, degree::Int, 
-        weightType::Int) where {T}
+        weightType::Int, derivative::Int=0) where {T}
 
-        @assert weightType ∈ WEIGHTTYPES "unvalid weight function provided"
+        @assert weightType ∈ WEIGHTTYPES "invalid weight function provided"
+        @assert derivative >= 0 "derivative must be non-negative"
+        @assert derivative <= degree "derivative must be <= degree"
 
-        new{T}(length, degree, weightType)
+        new{T}(length, degree, weightType, derivative)
     end
 end
 
@@ -54,6 +59,7 @@ struct WeightedSavitzkyGolayFilterInstance{T<:RealQuantity} <: AbstractRadSigFil
     m::Int
     degree::Int
     weightType::Int
+    derivative::Int
     n_input::Int
 end
 
@@ -82,7 +88,7 @@ function fltinstance(flt::WeightedSavitzkyGolayFilter, fi::SamplingInfo{T}
     msg2 = "degree too big for given kernel size; max degree: $(d_max)"
     @assert flt.degree <= 2*m msg2
 
-    WeightedSavitzkyGolayFilterInstance{T}(m, flt.degree, flt.weightType, l)
+    WeightedSavitzkyGolayFilterInstance{T}(m, flt.degree, flt.weightType, flt.derivative, l)
 end
 
 RadiationDetectorDSP.flt_output_smpltype(fi::WeightedSavitzkyGolayFilterInstance) = RadiationDetectorDSP._floattype(flt_input_smpltype(fi))
@@ -98,8 +104,38 @@ function RadiationDetectorDSP.rdfilt!(output::AbstractVector,
     Polynomials = Array{T}(undef, fi.degree+1, k_len)
     Kernel = Array{T}(undef, k_len)
     weights = Vector{T}(undef, k_len)
+    
+    # First apply weighted SG smoothing
     _unsafe_convolve!(output, Polynomials, Kernel, weights, input, fi.m, 
         fi.degree, fi.weightType)
+    
+    # Then apply derivative if requested
+    if fi.derivative > 0
+        # Apply numerical derivative using central differences
+        temp = copy(output)
+        for _ in 1:fi.derivative
+            _apply_central_diff!(output, temp)
+            temp .= output
+        end
+    end
+    
+    output
+end
+
+# Apply central difference derivative to signal.
+# output[i] = (input[i+1] - input[i-1]) / 2
+# Boundary: forward/backward difference  
+@inbounds function _apply_central_diff!(output::AbstractVector{T}, input::AbstractVector{T}) where T
+    n = length(input)
+    # Forward difference at left boundary  
+    output[1] = input[2] - input[1]
+    # Central differences for interior
+    @simd for i in 2:n-1
+        output[i] = (input[i+1] - input[i-1]) / T(2)
+    end
+    # Backward difference at right boundary
+    output[n] = input[n] - input[n-1]
+    output
 end
 
 Adapt.adapt_structure(to, flt::WeightedSavitzkyGolayFilter) = flt

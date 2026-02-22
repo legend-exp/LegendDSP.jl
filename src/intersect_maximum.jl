@@ -21,17 +21,21 @@ function (f::IntersectMaximum)(input::RadiationDetectorDSP.SamplesOrWaveform, th
     max_n_for_max = max(1, round(Int, ustrip(NoUnits, f.maxtot / step(X_axis))))
     _find_intersect_maximum_impl(X_axis, Y, threshold, min_n_over_thresh, max_n_for_max)
 end
+
 function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.RealQuantity}, Y::AbstractVector{<:RadiationDetectorDSP.RealQuantity}, threshold::RadiationDetectorDSP.RealQuantity, min_n_over_thresh::Int, max_n_for_max::Int)
     @assert axes(X) == axes(Y)
-    # ToDo: What if eltype(Y) is based on ForwardDiff.Dual, but eltype(X) is not?
     R = float(eltype(X))
     if isempty(Y)
         return (
-            x = R(NaN),
-            multiplicity = -1
+            x = R[],
+            x2 = R[],
+            x_diff = R[],
+            max = Float64[],
+            multiplicity = 0
         )
     end
-    # GPU-friendly branch-free code:
+    
+    # Find up-crossings (where signal goes above threshold)
     cand_pos::Int = firstindex(Y) + 1
     intersect_pos_arr::Array{Int} = Int[]
     y_high_counter::Int = ifelse(first(Y) > threshold, min_n_over_thresh + 1, 0)
@@ -48,8 +52,9 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
             push!(intersect_pos_arr, cand_pos)
         end
     end
+    
+    # Linear interpolation for up-crossings (x1)
     intersect_cand_x = zeros(R, length(intersect_pos_arr))
-    # Linear interpolation:
     for (i, intersect_pos) in enumerate(intersect_pos_arr)
         x_l = X[intersect_pos - 1]
         x_r = X[intersect_pos]
@@ -57,7 +62,40 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
         y_r = Y[intersect_pos]
         intersect_cand_x[i] = R(threshold - y_l) * R(x_r - x_l) / R(y_r - y_l) + R(x_l)
     end
-    # TODO: return NaN if no intersect found but make sure it is compatible with the other routines
+    
+    # Find down-crossings (where signal goes below threshold after each up-crossing)
+    intersect_down_x = zeros(R, length(intersect_pos_arr))
+    intersect_diff_x = zeros(R, length(intersect_pos_arr))
+    
+    for (i, up_pos) in enumerate(intersect_pos_arr)
+        # Search for down-crossing starting from up-crossing position
+        down_pos = 0
+        was_high = true
+        @inbounds for j in up_pos:lastindex(Y)
+            y = Y[j]
+            y_is_low = y < threshold
+            if was_high && y_is_low
+                down_pos = j
+                break
+            end
+            was_high = !y_is_low
+        end
+        
+        # Linear interpolation for down-crossing (x2)
+        if down_pos > firstindex(Y)
+            x_l = X[down_pos - 1]
+            x_r = X[down_pos]
+            y_l = Y[down_pos - 1]
+            y_r = Y[down_pos]
+            intersect_down_x[i] = R(threshold - y_l) * R(x_r - x_l) / R(y_r - y_l) + R(x_l)
+            intersect_diff_x[i] = intersect_down_x[i] - intersect_cand_x[i]
+        else
+            # No down-crossing found, set to end of waveform
+            intersect_down_x[i] = R(last(X))
+            intersect_diff_x[i] = intersect_down_x[i] - intersect_cand_x[i]
+        end
+    end
+    
     n_intersects = ifelse(n_intersects > 0, n_intersects, 0)
     intersect_max = zeros(length(intersect_pos_arr))
     if n_intersects > 0
@@ -77,6 +115,8 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
     end
     return (
         x = intersect_cand_x,
+        x2 = intersect_down_x,
+        x_diff = intersect_diff_x,
         max = intersect_max,
         multiplicity = n_intersects
     )
