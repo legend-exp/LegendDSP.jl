@@ -499,7 +499,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         qdrift = qdrift, lq = lq,
         # currents & Pileup
         a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
-        inTrace_intersect = inTrace_pileUp.intersect,
+        inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
         # inverse parameters
         e_10410_inv = e_10410_max_inv, e_313_inv = e_313_max_inv,
         t0_inv = t0_inv,
