@@ -80,7 +80,7 @@ using Unitful
 
     # Edge case: empty waveform returns empty arrays with x_high and x_tot
     empty_signal = Float64[]
-    empty_times = typeof(Δt)[]
+    empty_times = (0:-1) .* Δt
     wvf_empty = RDWaveform(empty_times, empty_signal)
     res_empty = intflt(wvf_empty, 0.4)
     @test res_empty.multiplicity == 0
