@@ -1,26 +1,34 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
+    dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Union{Function, Missing})
 
 Get QC DSP for filter parameter optimization for a given waveform set.
+If f_evaluate_qc is missing, skips expensive ML classification and sets qc_label=-1.
 """
 function dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
     _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier, f_evaluate_qc))
 end
+function dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, ::Missing)
+    _get_dsp_qc_flt_optimization(wvfs, config, τ, nothing)
+end
 export dsp_qc_flt_optimization
 
 """
-    dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
+    dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Union{Function, Missing})
 
 Get QC DSP for filter parameter optimization for a given waveform set.
+If f_evaluate_qc is missing, skips expensive ML classification and sets qc_label=-1.
 """
 function dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function) 
     _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier_compressed, f_evaluate_qc))
 end
+function dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, ::Missing) 
+    _get_dsp_qc_flt_optimization(wvfs, config, τ, nothing)
+end
 export dsp_qc_flt_optimization_compressed
 
-function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, get_qc::Function)
+function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, get_qc::Union{Function, Nothing})
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
 
@@ -37,8 +45,8 @@ function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfi
     # t50 determination
     t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
 
-    # get QC classifier labels
-    qc_labels = get_qc(wvfs)
+    # get QC classifier labels (skip expensive Haar filtering if no ML model)
+    qc_labels = isnothing(get_qc) ? fill(-1, length(wvfs)) : get_qc(wvfs)
 
     # get default filter parameters
     rt = config.default_flt_param.trap.rt
