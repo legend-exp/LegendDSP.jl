@@ -368,17 +368,21 @@ export dsp_zac_ft_optimization
 
 
 """ 
-    dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where T<:Real
+    dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
 
 Optimize the Savitzky-Golay filter parameters for a given waveform set.
+
+# Arguments
+    - `f_evaluate_qc`: Optional ML QC evaluation function. If missing, default qc_label=-1 is used.
 
 # Returns
     - `aoe`: Array of efficiency values for the given Savitzky-Golay filter parameters
     - `e`: Array of energy values for the given Savitzky-Golay filter parameters
     - `blmean`: Baseline mean value
     - `blslope`: Baseline slope value
+    - `qc_label`: QC labels (-1 if no ML model available)
 """
-function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where T<:Real
+function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
     # get config parameters
     bl_window      = config.bl_window
     a_grid_wl_sg   = config.a_grid_wl_sg
@@ -394,6 +398,13 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
 
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+
+    # get QC classifier labels (default -1 if no ML model available)
+    qc_labels = if !ismissing(f_evaluate_qc)
+        get_qc_classifier(wvfs, f_evaluate_qc)
+    else
+        fill(-1, length(wvfs))
+    end
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
@@ -420,7 +431,7 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     end
     return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft, 
         blmean = bl_stats.mean, blslope = bl_stats.slope, 
-        t50 = t50_pre,
+        t50 = t50,
         qc_label = qc_labels
     )
 end
@@ -428,15 +439,19 @@ export dsp_sg_optimization
 
 
 """ 
-    dsp_sg_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where T<:Real
+    dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
 
 Optimize the Savitzky-Golay filter parameters for a given waveform set.
+
+# Arguments
+    - `f_evaluate_qc`: Optional ML QC evaluation function. If missing, default qc_label=-1 is used.
 
 # Returns
     - `aoe`: Array of efficiency values for the given Savitzky-Golay filter parameters
     - `e`: Array of energy values for the given Savitzky-Golay filter parameters
     - `blmean`: Baseline mean value
     - `blslope`: Baseline slope value
+    - `qc_label`: QC labels (-1 if no ML model available)
 """
 function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
     # get config parameters
@@ -456,8 +471,8 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
     wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
     wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate)
 
-    # get QC classifier labels
-    qc_labels = zeros(length(wvfs_pre))
+    # get QC classifier labels (default -1 if no ML model available)
+    qc_labels = fill(-1, length(wvfs_pre))
     if !ismissing(f_evaluate_qc)
         qc_labels = get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)
     end
