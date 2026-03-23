@@ -83,6 +83,13 @@ struct DSPConfig{T <: Real}
 
     # additional pars
     kwargs_pars::PropDict
+
+    # auxiliary baseline windows
+    auxbl1_window::ClosedInterval{<:Quantity{<:T}}
+    auxbl2_window::ClosedInterval{<:Quantity{<:T}}
+
+    auxpz1_window::ClosedInterval{<:Quantity{<:T}}
+    auxpz2_window::ClosedInterval{<:Quantity{<:T}}
 end
 export DSPConfig
 
