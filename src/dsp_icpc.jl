@@ -473,10 +473,10 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         n_sat_low=sat_stats.low, n_sat_high=sat_stats.high, n_sat_low_cons=sat_stats.max_cons_low, n_sat_high_cons=sat_stats.max_cons_high,
         t_sat_lo=t_sat_lo, t_sat_hi=t_sat_hi,
         # baseline 
-        blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, bl_sigma_2 = bl_stats.sigma_2,
+        blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, bl_slope_sigma = bl_stats.slope_residual_sigma,
         # aux baselines
-        auxbl1_mean = auxbl1_stats.mean, auxbl1_sigma = auxbl1_stats.sigma, auxbl1_sigma_2 = auxbl1_stats.sigma_2,
-        auxbl2_mean = auxbl2_stats.mean, auxbl2_sigma = auxbl2_stats.sigma, auxbl2_sigma_2 = auxbl2_stats.sigma_2,
+        auxbl1_mean = auxbl1_stats.mean, auxbl1_sigma = auxbl1_stats.sigma, auxbl1_slope_sigma = auxbl1_stats.slope_residual_sigma,
+        auxbl2_mean = auxbl2_stats.mean, auxbl2_sigma = auxbl2_stats.sigma, auxbl2_slope_sigma = auxbl2_stats.slope_residual_sigma,
         # ML QC label
         qc_label = qc_labels,
         # waveform extrema 
@@ -485,8 +485,8 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         tailmean = pz_stats.mean, tailsigma = pz_stats.sigma, tailslope = pz_stats.slope, tailoffset = pz_stats.offset,
         tail_τ = tail_stats.τ, tail_mean = tail_stats.mean, tail_sigma = tail_stats.sigma,
         # auxiliary pz parameters
-        auxpz1_mean = auxpz1_stats.mean, auxpz1_sigma = auxpz1_stats.sigma, auxpz1_sigma_2 = auxpz1_stats.sigma_2,
-        auxpz2_mean = auxpz2_stats.mean, auxpz2_sigma = auxpz2_stats.sigma, auxpz2_sigma_2 = auxpz2_stats.sigma_2,
+        auxpz1_mean = auxpz1_stats.mean, auxpz1_sigma = auxpz1_stats.sigma, auxpz1_slope_sigma = auxpz1_stats.slope_residual_sigma,
+        auxpz2_mean = auxpz2_stats.mean, auxpz2_sigma = auxpz2_stats.sigma, auxpz2_slope_sigma = auxpz2_stats.slope_residual_sigma,
         # timing parameters
         t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99, t50_pre = t50_pre,
         drift_time = drift_time, t50_current = t50_current,
