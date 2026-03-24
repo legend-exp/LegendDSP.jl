@@ -57,7 +57,16 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         dsp_metadata.flt_defaults,
         
         # flt parameters
-        dsp_metadata.kwargs_pars)
+        dsp_metadata.kwargs_pars,
+        
+        # auxiliary baseline windows
+        dsp_metadata.auxbl1_window.min .. dsp_metadata.auxbl1_window.max,
+        dsp_metadata.auxbl2_window.min .. dsp_metadata.auxbl2_window.max,
+
+
+        dsp_metadata.auxpz1_window.min .. dsp_metadata.auxpz1_window.max,
+        dsp_metadata.auxpz2_window.min .. dsp_metadata.auxpz2_window.max,
+        )
 end
 
 function get_fltpars(pd::PropDict, flt::Symbol, dspconfig::DSPConfig)
