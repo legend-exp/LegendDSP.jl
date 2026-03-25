@@ -11,5 +11,6 @@ Test.@testset "Package LegendDSP" begin
     include("test_timeaxis.jl")
     include("test_docs.jl")
     include("test_alternative_filters.jl")
+    include("test_dsp_icpc.jl")
     isempty(Test.detect_ambiguities(LegendDSP))
 end # testset
