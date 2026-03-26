@@ -46,7 +46,7 @@ function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfi
     t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
 
     # get QC classifier labels (skip expensive Haar filtering if no ML model)
-    qc_labels = isnothing(get_qc) ? fill(-1, length(wvfs)) : get_qc(wvfs)
+    qc_labels = isnothing(get_qc) ? fill(-1, length(wvfs)) : Int.(get_qc(wvfs))
 
     # get default filter parameters
     rt = config.default_flt_param.trap.rt
@@ -385,7 +385,7 @@ Optimize the Savitzky-Golay filter parameters for a given waveform set.
 
 # Returns
     - `aoe`: Array of efficiency values for the given Savitzky-Golay filter parameters
-    - `e`: Array of energy values for the given Savitzky-Golay filter parameters
+    - `energy`: Array of energy values for the given Savitzky-Golay filter parameters
     - `blmean`: Baseline mean value
     - `blslope`: Baseline slope value
     - `qc_label`: QC labels (-1 if no ML model available)
@@ -408,7 +408,7 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
     # get QC classifier labels (skip expensive ML classification if no model)
-    qc_labels = !ismissing(f_evaluate_qc) ? get_qc_classifier(wvfs, f_evaluate_qc) : fill(-1, length(wvfs))
+    qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier(wvfs, f_evaluate_qc)) : fill(-1, length(wvfs))
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)
@@ -452,7 +452,7 @@ Optimize the Savitzky-Golay filter parameters for a given waveform set.
 
 # Returns
     - `aoe`: Array of efficiency values for the given Savitzky-Golay filter parameters
-    - `e`: Array of energy values for the given Savitzky-Golay filter parameters
+    - `energy`: Array of energy values for the given Savitzky-Golay filter parameters
     - `blmean`: Baseline mean value
     - `blslope`: Baseline slope value
     - `qc_label`: QC labels (-1 if no ML model available)
@@ -476,7 +476,7 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
     wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate)
 
     # get QC classifier labels (skip expensive ML classification if no model)
-    qc_labels = !ismissing(f_evaluate_qc) ? get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc) : fill(-1, length(wvfs_pre))
+    qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)) : fill(-1, length(wvfs_pre))
 
     # deconvolute waveform
     deconv_flt = InvCRFilter(τ)

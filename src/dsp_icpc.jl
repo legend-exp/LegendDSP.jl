@@ -105,7 +105,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
     # get QC classifier labels (skip expensive ML classification if no model)
-    qc_labels = !ismissing(f_evaluate_qc) ? get_qc_classifier(wvfs, f_evaluate_qc) : fill(-1, length(wvfs))
+    qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier(wvfs, f_evaluate_qc)) : fill(-1, length(wvfs))
     
     # get wvf maximum
     wvf_max = maximum.(wvfs.signal)
@@ -344,7 +344,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate_value)
 
     # get QC classifier labels (skip expensive ML classification if no model)
-    qc_labels = !ismissing(f_evaluate_qc) ? get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc) : fill(-1, length(wvfs_pre))
+    qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)) : fill(-1, length(wvfs_pre))
     
     # get wvf maximum
     wvf_max_pre = maximum.(wvfs_pre.signal)
