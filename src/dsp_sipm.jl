@@ -19,10 +19,30 @@ The output data is a table with the following columns:
 - `timestamp`: timestamp
 - `eventID_fadc`: event number from FADC
 - `e_fc`: energy from FADC
-- `trig_pos`: trigger positions from DSP
-- `trig_max`: trigger maxima from DSP
-- `trig_pos_DC`: trigger positions of discharges
-- `trig_max_DC`: trigger maxima of discharges
+- `t_max`, `t_min`: time of waveform maximum/minimum
+- `t_max_lar`, `t_min_lar`: time of waveform maximum/minimum in LAr window
+- `e_max`, `e_min`: waveform maximum/minimum amplitude
+- `e_max_lar`, `e_min_lar`: waveform maximum/minimum amplitude in LAr window
+- `blmean`, `blsigma`, `blslope`, `bloffset`: baseline statistics
+- `wfmean`, `wfsigma`, `wfslope`, `wfoffset`: waveform statistics
+## SG filter columns
+- `threshold`: SG trigger threshold
+- `threshold_DC`: SG discharge trigger threshold
+- `trig_pos`: SG trigger positions
+- `trig_max`: SG trigger maxima
+- `trig_pos_DC`: SG discharge trigger positions
+- `trig_max_DC`: SG discharge trigger maxima
+## Trap filter columns
+- `threshold_trap`: trap trigger threshold
+- `threshold_DC_trap`: trap discharge trigger threshold
+- `trig_pos_trap`: trap trigger positions
+- `trig_pos_high_trap`: trap trigger high positions
+- `trig_pos_tot_trap`: trap trigger time-over-threshold positions
+- `trig_max_trap`: trap trigger maxima
+- `trig_pos_DC_trap`: trap discharge trigger positions
+- `trig_pos_high_DC_trap`: trap discharge trigger high positions
+- `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
+- `trig_max_DC_trap`: trap discharge trigger maxima
 """
 function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # common config
@@ -109,13 +129,13 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     wvfs_trap = trap_filter.(wvfs_pz)
 
     # trigger finding on trap-filtered waveforms
-    intflt_trap = IntersectMaximum(trap_min_tot_intersect, trap_max_tot_intersect)
+    intflt_trap = IntersectMaximum(min_tot_intersect, max_tot_intersect)
     inters_thres_trap = thresholdstats_mad.(wvfs_trap, trap_min_threshold, trap_max_threshold)
     inters_trap = intflt_trap.(wvfs_trap, trap_n_σ_threshold .* inters_thres_trap)
 
     # discharge detection on flipped integrated waveforms 
     inters_thres_DC_trap = thresholdstats_mad.(wvfs_int_flip, trap_min_dc_threshold, trap_max_dc_threshold)
-    inters_DC_trap = intflt_sg.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
+    inters_DC_trap = intflt_trap.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
 
     # output Table 
     return TypedTables.Table(
@@ -159,10 +179,30 @@ The output data is a table with the following columns:
 - `timestamp`: timestamp
 - `eventID_fadc`: event number from FADC
 - `e_fc`: energy from FADC
-- `trig_pos`: trigger positions from DSP
-- `trig_max`: trigger maxima from DSP
-- `trig_pos_DC`: trigger positions of discharges
-- `trig_max_DC`: trigger maxima of discharges
+- `t_max`, `t_min`: time of waveform maximum/minimum
+- `t_max_lar`, `t_min_lar`: time of waveform maximum/minimum in LAr window
+- `e_max`, `e_min`: waveform maximum/minimum amplitude
+- `e_max_lar`, `e_min_lar`: waveform maximum/minimum amplitude in LAr window
+- `blmean`, `blsigma`, `blslope`, `bloffset`: baseline statistics
+- `wfmean`, `wfsigma`, `wfslope`, `wfoffset`: waveform statistics
+## SG filter columns
+- `threshold`: SG trigger threshold
+- `threshold_DC`: SG discharge trigger threshold
+- `trig_pos`: SG trigger positions
+- `trig_max`: SG trigger maxima
+- `trig_pos_DC`: SG discharge trigger positions
+- `trig_max_DC`: SG discharge trigger maxima
+## Trap filter columns
+- `threshold_trap`: trap trigger threshold
+- `threshold_DC_trap`: trap discharge trigger threshold
+- `trig_pos_trap`: trap trigger positions
+- `trig_pos_high_trap`: trap trigger high positions
+- `trig_pos_tot_trap`: trap trigger time-over-threshold positions
+- `trig_max_trap`: trap trigger maxima
+- `trig_pos_DC_trap`: trap discharge trigger positions
+- `trig_pos_high_DC_trap`: trap discharge trigger high positions
+- `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
+- `trig_max_DC_trap`: trap discharge trigger maxima
 """
 function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # common config
@@ -255,7 +295,7 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
 
     # discharge detection on flipped integrated waveforms 
     inters_thres_DC_trap = thresholdstats_mad.(wvfs_int_flip, trap_min_dc_threshold, trap_max_dc_threshold)
-    inters_DC_trap = intflt_sg.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
+    inters_DC_trap = intflt_trap.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
 
     # output Table 
     return TypedTables.Table(
