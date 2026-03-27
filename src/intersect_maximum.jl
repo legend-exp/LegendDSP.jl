@@ -25,20 +25,21 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
     @assert axes(X) == axes(Y)
     # ToDo: What if eltype(Y) is based on ForwardDiff.Dual, but eltype(X) is not?
     R = float(eltype(X))
+    M = float(eltype(Y))
 
     if isempty(Y)
         return (
             x = R[],
             x_high = R[],
             x_tot = R[],
-            max = Float64[],
+            max = M[],
             multiplicity = 0
         )
     end
 
     # Find up-crossings: positions where signal goes above threshold for at least min_n_over_thresh consecutive samples
     cand_pos::Int = firstindex(Y) + 1
-    up_positions = Int[]
+    up_positions::Array{Int} = Int[]
     y_high_counter::Int = ifelse(first(Y) > threshold, min_n_over_thresh + 1, 0)
     n_intersects::Int = 0
     @inbounds for i in eachindex(Y)
@@ -61,7 +62,7 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
     intersect_x = zeros(R, n)
     x_high = zeros(R, n)
     x_tot = zeros(R, n)
-    intersect_max = zeros(n)
+    intersect_max = zeros(M, n)
 
     for (i, up_pos) in enumerate(up_positions)
         # Linear interpolation for up-crossing
@@ -113,6 +114,6 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
         x_high = x_high,
         x_tot = x_tot,
         max = intersect_max,
-        multiplicity = n_intersects
+        multiplicity = n
     )
 end

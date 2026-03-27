@@ -91,9 +91,9 @@ using Unitful
 
     # Multiple crossings: test that x_high and x_tot are correct per pulse
     signal_multi = zeros(Float64, n_samples)
-    # Pulse 1: samples 100-110
+    # Pulse 1: samples 100-105
     signal_multi[100:105] .= 0.8
-    # Pulse 2: samples 200-220
+    # Pulse 2: samples 200-215
     signal_multi[200:215] .= 0.9
     wvf_multi = RDWaveform(times, signal_multi)
 
