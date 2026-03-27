@@ -25,15 +25,21 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
     @assert axes(X) == axes(Y)
     # ToDo: What if eltype(Y) is based on ForwardDiff.Dual, but eltype(X) is not?
     R = float(eltype(X))
+    M = float(eltype(Y))
+
     if isempty(Y)
         return (
-            x = R(NaN),
-            multiplicity = -1
+            x = R[],
+            x_high = R[],
+            x_tot = R[],
+            max = M[],
+            multiplicity = 0
         )
     end
-    # GPU-friendly branch-free code:
+
+    # Find up-crossings: positions where signal goes above threshold for at least min_n_over_thresh consecutive samples
     cand_pos::Int = firstindex(Y) + 1
-    intersect_pos_arr::Array{Int} = Int[]
+    up_positions::Array{Int} = Int[]
     y_high_counter::Int = ifelse(first(Y) > threshold, min_n_over_thresh + 1, 0)
     n_intersects::Int = 0
     @inbounds for i in eachindex(Y)
@@ -45,39 +51,69 @@ function _find_intersect_maximum_impl(X::AbstractVector{<:RadiationDetectorDSP.R
         new_intersect_found = y_high_counter == min_n_over_thresh
         n_intersects = ifelse(new_intersect_found, n_intersects + 1, n_intersects)
         if new_intersect_found && cand_pos > firstindex(Y)
-            push!(intersect_pos_arr, cand_pos)
+            push!(up_positions, cand_pos)
         end
     end
-    intersect_cand_x = zeros(R, length(intersect_pos_arr))
-    # Linear interpolation:
-    for (i, intersect_pos) in enumerate(intersect_pos_arr)
-        x_l = X[intersect_pos - 1]
-        x_r = X[intersect_pos]
-        y_l = Y[intersect_pos - 1]
-        y_r = Y[intersect_pos]
-        intersect_cand_x[i] = R(threshold - y_l) * R(x_r - x_l) / R(y_r - y_l) + R(x_l)
-    end
-    # TODO: return NaN if no intersect found but make sure it is compatible with the other routines
-    n_intersects = ifelse(n_intersects > 0, n_intersects, 0)
-    intersect_max = zeros(length(intersect_pos_arr))
-    if n_intersects > 0
-        for (i, intersect_pos) in enumerate(intersect_pos_arr)
-            from = max(intersect_pos - 2, firstindex(Y))
-            until = min(intersect_pos + max_n_for_max, lastindex(Y))
-            idxs = from:until
-            @inbounds begin
-                ind_max = argmax(Y[idxs])
-                if 1 < ind_max < length(idxs)
-                    intersect_max[i] = extrema3points(view(Y[idxs], ind_max-1:ind_max+1)...)
-                else
-                    intersect_max[i] = Y[idxs][ind_max]
-                end
+
+    n_intersects = max(n_intersects, 0)
+    n = length(up_positions)
+
+    # Preallocate output arrays
+    intersect_x = zeros(R, n)
+    x_high = zeros(R, n)
+    x_tot = zeros(R, n)
+    intersect_max = zeros(M, n)
+
+    for (i, up_pos) in enumerate(up_positions)
+        # Linear interpolation for up-crossing
+        @inbounds begin
+            x_l = X[up_pos - 1]; x_r = X[up_pos]
+            y_l = Y[up_pos - 1]; y_r = Y[up_pos]
+            intersect_x[i] = R(threshold - y_l) * R(x_r - x_l) / R(y_r - y_l) + R(x_l)
+        end
+
+        # Find maximum in window after up-crossing
+        from = max(up_pos - 2, firstindex(Y))
+        until = min(up_pos + max_n_for_max, lastindex(Y))
+        idxs = from:until
+        @inbounds begin
+            ind_max = argmax(Y[idxs])
+            if 1 < ind_max < length(idxs)
+                intersect_max[i] = extrema3points(view(Y[idxs], ind_max-1:ind_max+1)...)
+            else
+                intersect_max[i] = Y[idxs][ind_max]
             end
         end
+
+        # Find down-crossing: first sample below threshold after the confirmed up-crossing region
+        down_pos = 0
+        @inbounds for j in (up_pos + min_n_over_thresh):lastindex(Y)
+            if Y[j] < threshold
+                down_pos = j
+                break
+            end
+        end
+
+        # Linear interpolation for down-crossing (x_high)
+        if down_pos > firstindex(Y)
+            @inbounds begin
+                x_l = X[down_pos - 1]; x_r = X[down_pos]
+                y_l = Y[down_pos - 1]; y_r = Y[down_pos]
+                x_high[i] = R(threshold - y_l) * R(x_r - x_l) / R(y_r - y_l) + R(x_l)
+            end
+        else
+            # No down-crossing found: signal stays above threshold until end of waveform
+            x_high[i] = R(last(X))
+        end
+
+        x_tot[i] = x_high[i] - intersect_x[i]
     end
+
     return (
-        x = intersect_cand_x,
+        x = intersect_x,
+        x_high = x_high,
+        x_tot = x_tot,
         max = intersect_max,
-        multiplicity = n_intersects
+        multiplicity = n
     )
 end
