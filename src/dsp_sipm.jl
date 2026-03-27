@@ -131,11 +131,11 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     # trigger finding on trap-filtered waveforms
     intflt_trap = IntersectMaximum(trap_min_tot_intersect, trap_max_tot_intersect)
     inters_thres_trap = thresholdstats_mad.(wvfs_trap, trap_min_threshold, trap_max_threshold)
-    inters_trap = intflt_sg.(wvfs_trap, trap_n_σ_threshold .* inters_thres_trap)
+    inters_trap = intflt_trap.(wvfs_trap, trap_n_σ_threshold .* inters_thres_trap)
 
     # discharge detection on flipped integrated waveforms 
     inters_thres_DC_trap = thresholdstats_mad.(wvfs_int_flip, trap_min_dc_threshold, trap_max_dc_threshold)
-    inters_DC_trap = intflt_trap.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
+    inters_DC_trap = intflt_sg.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
 
     # output Table 
     return TypedTables.Table(
