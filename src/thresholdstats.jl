@@ -39,3 +39,33 @@ function _thresholdstats_impl(Y::AbstractArray{T}, _min::T, _max::T) where {T <:
     sqrt(var_Y)
 
 end
+
+
+"""
+    thresholdstats_mad(signal::AbstractSamples, min::Real, max::Real)
+    thresholdstats_mad(signal::RDWaveform, min::RealQuantity, max::RealQuantity)
+
+Get a robust threshold estimate using the Median Absolute Deviation (MAD)
+of all samples in a `signal` that are within the lower bound `min` and
+the upper bound `max`. The MAD is scaled by 1.4826 to be consistent with
+the standard deviation for normally distributed data.
+"""
+function thresholdstats_mad end
+export thresholdstats_mad
+
+function thresholdstats_mad(input::RadiationDetectorDSP.SamplesOrWaveform{T}, min::RadiationDetectorDSP.RealQuantity = -Inf * unit(T), max::RadiationDetectorDSP.RealQuantity = Inf * unit(T)) where T
+    _, Y = RadiationDetectorDSP._get_axis_and_signal(input)
+    _thresholdstats_mad_impl(Y, T(min), T(max))
+end
+
+function _thresholdstats_mad_impl(Y::AbstractArray{T}, _min::T, _max::T) where {T <: RealQuantity}
+    Y_filt = [y for y in Y if _min <= y <= _max]
+    isempty(Y_filt) && return zero(float(T))
+    med = median(Y_filt)
+    @inbounds @fastmath for i in eachindex(Y_filt)
+        Y_filt[i] = abs(Y_filt[i] - med)
+    end
+    # 1/Φ⁻¹(3/4) ≈ 1.4826, consistency constant for MAD under normality
+    # (Rousseeuw & Croux, J. Amer. Statist. Assoc. 88, 1993)
+    oftype(float(one(T)), 1.4826) * median!(Y_filt)
+end

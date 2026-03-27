@@ -9,6 +9,7 @@ module LegendDSP
 
 using LinearAlgebra
 using Random
+using Statistics
 
 using ArgCheck
 using ArraysOfArrays
