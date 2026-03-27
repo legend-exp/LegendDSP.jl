@@ -65,5 +65,7 @@ function _thresholdstats_mad_impl(Y::AbstractArray{T}, _min::T, _max::T) where {
     @inbounds @fastmath for i in eachindex(Y_filt)
         Y_filt[i] = abs(Y_filt[i] - med)
     end
-    1.4826 * median!(Y_filt)
+    # 1/Φ⁻¹(3/4) ≈ 1.4826, consistency constant for MAD under normality
+    # (Rousseeuw & Croux, J. Amer. Statist. Assoc. 88, 1993)
+    oftype(float(one(T)), 1.4826) * median!(Y_filt)
 end
