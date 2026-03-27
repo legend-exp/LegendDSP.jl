@@ -62,5 +62,8 @@ function _thresholdstats_mad_impl(Y::AbstractArray{T}, _min::T, _max::T) where {
     Y_filt = [y for y in Y if _min <= y <= _max]
     isempty(Y_filt) && return zero(float(T))
     med = median(Y_filt)
-    1.4826 * median(abs.(Y_filt .- med))
+    @inbounds @fastmath for i in eachindex(Y_filt)
+        Y_filt[i] = abs(Y_filt[i] - med)
+    end
+    1.4826 * median!(Y_filt)
 end
