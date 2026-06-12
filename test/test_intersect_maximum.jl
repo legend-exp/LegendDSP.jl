@@ -25,10 +25,8 @@ using Unitful
     @test res_start.x[1] < 48u"ns"  # intersection should be between sample 2 and 3
     @test res_start.max[1] >= 0.6   # maximum should be at least 0.6 (interpolated value can be higher)
     @test res_start.max[1] < 0.7    # but not unreasonably high
-    # down-crossing and time-over-threshold
-    @test res_start.x_high[1] > res_start.x[1]
+    # time-over-threshold (down-crossing is no longer returned, only x_tot)
     @test res_start.x_tot[1] > 0u"ns"
-    @test res_start.x_tot[1] ≈ res_start.x_high[1] - res_start.x[1]
 
     # Intersection close to the end of the waveform
     signal_end = zeros(Float64, n_samples)
@@ -46,7 +44,6 @@ using Unitful
     @test res_end.x[1] < times[end]
     @test res_end.max[1] >= 0.6   # maximum should be at least 0.6 (interpolated value can be higher)
     @test res_end.max[1] < 0.7    # but not unreasonably high
-    @test res_end.x_high[1] > res_end.x[1]
     @test res_end.x_tot[1] > 0u"ns"
 
     # Edge case: Maximum at last sample of search window (ind_max == length(idxs))
@@ -75,21 +72,21 @@ using Unitful
     res_last_intersect = intflt(wvf_last_intersect, 0.4)
     @test res_last_intersect.multiplicity == 1
     @test res_last_intersect.x[1] > times[end-3]
-    # signal stays above threshold → x_high should be at end of waveform
-    @test res_last_intersect.x_high[1] == times[end]
+    # signal stays above threshold → down-crossing falls back to the waveform end,
+    # so x_tot spans from the up-crossing to the end
+    @test res_last_intersect.x_tot[1] ≈ times[end] - res_last_intersect.x[1]
 
-    # Edge case: empty waveform returns empty arrays with x_high and x_tot
+    # Edge case: empty waveform returns empty arrays
     empty_signal = Float64[]
     empty_times = (0:-1) .* Δt
     wvf_empty = RDWaveform(empty_times, empty_signal)
     res_empty = intflt(wvf_empty, 0.4)
     @test res_empty.multiplicity == 0
     @test isempty(res_empty.x)
-    @test isempty(res_empty.x_high)
     @test isempty(res_empty.x_tot)
     @test isempty(res_empty.max)
 
-    # Multiple crossings: test that x_high and x_tot are correct per pulse
+    # Multiple crossings: test that x_tot is correct per pulse
     signal_multi = zeros(Float64, n_samples)
     # Pulse 1: samples 100-105
     signal_multi[100:105] .= 0.8
@@ -99,9 +96,42 @@ using Unitful
 
     res_multi = intflt(wvf_multi, 0.4)
     @test res_multi.multiplicity == 2
-    @test length(res_multi.x_high) == 2
     @test length(res_multi.x_tot) == 2
     @test all(res_multi.x_tot .> 0u"ns")
     # second pulse is longer
     @test res_multi.x_tot[2] > res_multi.x_tot[1]
+end
+
+@testset "IntersectMaximum interpolation = false" begin
+    Δt = 16u"ns"
+    n_samples = 6200
+    times = (0:n_samples-1) .* Δt
+
+    # Pulse with an interior maximum so interpolation actually differs from the raw samples
+    signal = zeros(Float64, n_samples)
+    signal[100] = 0.3
+    signal[101] = 0.5   # first sample ≥ threshold (up-crossing region starts here)
+    signal[102] = 0.8
+    signal[103] = 1.0   # interior maximum
+    signal[104] = 0.7
+    signal[105] = 0.2   # first sample < threshold (down-crossing)
+    wvf = RDWaveform(times, signal)
+
+    res_t = IntersectMaximum(mintot = 2Δt, maxtot = 100Δt, interpolation = true)(wvf, 0.4)
+    res_f = IntersectMaximum(mintot = 2Δt, maxtot = 100Δt, interpolation = false)(wvf, 0.4)
+
+    # Lean output: x_high is no longer a field
+    @test keys(res_f) == (:x, :x_tot, :max, :multiplicity)
+    @test res_f.multiplicity == 1
+
+    # max: raw highest sample (no parabola) vs. 3-point parabola overshoot
+    @test res_f.max[1] == 1.0
+    @test res_t.max[1] > 1.0
+
+    # up-crossing: first sample ≥ threshold (on the grid) vs. interpolated (earlier)
+    @test res_f.x[1] == times[101]
+    @test res_t.x[1] < res_f.x[1]
+
+    # time-over-threshold on the grid: samples 101..104 over, 105 under → 4 Δt
+    @test res_f.x_tot[1] == 4Δt
 end

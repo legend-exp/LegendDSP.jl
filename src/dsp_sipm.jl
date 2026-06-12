@@ -36,11 +36,9 @@ The output data is a table with the following columns:
 - `threshold_trap`: trap trigger threshold
 - `threshold_DC_trap`: trap discharge trigger threshold
 - `trig_pos_trap`: trap trigger positions
-- `trig_pos_high_trap`: trap trigger high positions
 - `trig_pos_tot_trap`: trap trigger time-over-threshold positions
 - `trig_max_trap`: trap trigger maxima
 - `trig_pos_DC_trap`: trap discharge trigger positions
-- `trig_pos_high_DC_trap`: trap discharge trigger high positions
 - `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
 - `trig_max_DC_trap`: trap discharge trigger maxima
 """
@@ -150,9 +148,9 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
         trig_pos_DC = VectorOfVectors(inters_DC.x), trig_max_DC = VectorOfVectors(inters_DC.max),
         # Trap triggers
         threshold_trap = inters_thres_trap, threshold_DC_trap = inters_thres_DC_trap,
-        trig_pos_trap = VectorOfVectors(inters_trap.x), trig_pos_high_trap = VectorOfVectors(inters_trap.x_high),
+        trig_pos_trap = VectorOfVectors(inters_trap.x),
         trig_pos_tot_trap = VectorOfVectors(inters_trap.x_tot), trig_max_trap = VectorOfVectors(inters_trap.max),
-        trig_pos_DC_trap = VectorOfVectors(inters_DC_trap.x), trig_pos_high_DC_trap = VectorOfVectors(inters_DC_trap.x_high),
+        trig_pos_DC_trap = VectorOfVectors(inters_DC_trap.x),
         trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max)
     )
 end
@@ -196,11 +194,9 @@ The output data is a table with the following columns:
 - `threshold_trap`: trap trigger threshold
 - `threshold_DC_trap`: trap discharge trigger threshold
 - `trig_pos_trap`: trap trigger positions
-- `trig_pos_high_trap`: trap trigger high positions
 - `trig_pos_tot_trap`: trap trigger time-over-threshold positions
 - `trig_max_trap`: trap trigger maxima
 - `trig_pos_DC_trap`: trap discharge trigger positions
-- `trig_pos_high_DC_trap`: trap discharge trigger high positions
 - `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
 - `trig_max_DC_trap`: trap discharge trigger maxima
 """
@@ -310,9 +306,9 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
         trig_pos_DC = VectorOfVectors(inters_DC.x), trig_max_DC = VectorOfVectors(inters_DC.max),
         # Trap triggers
         threshold_trap = inters_thres_trap, threshold_DC_trap = inters_thres_DC_trap,
-        trig_pos_trap = VectorOfVectors(inters_trap.x), trig_pos_high_trap = VectorOfVectors(inters_trap.x_high),
+        trig_pos_trap = VectorOfVectors(inters_trap.x),
         trig_pos_tot_trap = VectorOfVectors(inters_trap.x_tot), trig_max_trap = VectorOfVectors(inters_trap.max),
-        trig_pos_DC_trap = VectorOfVectors(inters_DC_trap.x), trig_pos_high_DC_trap = VectorOfVectors(inters_DC_trap.x_high),
+        trig_pos_DC_trap = VectorOfVectors(inters_DC_trap.x),
         trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max)
     )
 end
