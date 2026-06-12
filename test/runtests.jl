@@ -13,6 +13,8 @@ Test.@testset "Package LegendDSP" begin
     include("test_alternative_filters.jl")
     include("test_dsp_icpc.jl")
     include("test_thresholdstats.jl")
+    include("test_histogram_baseline.jl")
+    include("test_iterative_baseline.jl")
     include("test_dsp_sipm.jl")
     isempty(Test.detect_ambiguities(LegendDSP))
 end # testset

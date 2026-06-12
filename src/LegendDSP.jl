@@ -35,6 +35,8 @@ using Unitful: RealOrRealQuantity as RealQuantity
 include("tailstats.jl")
 include("extremestats.jl")
 include("thresholdstats.jl")
+include("histogram_baseline.jl")
+include("iterative_baseline.jl")
 include("types.jl")
 include("utils.jl")
 include("derivative.jl")
