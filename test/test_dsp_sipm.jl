@@ -87,8 +87,8 @@ end
         :threshold, :threshold_DC,
         :trig_pos, :trig_max, :trig_pos_DC, :trig_max_DC,
         :threshold_trap, :threshold_DC_trap,
-        :trig_pos_trap, :trig_pos_high_trap, :trig_pos_tot_trap, :trig_max_trap,
-        :trig_pos_DC_trap, :trig_pos_high_DC_trap, :trig_pos_tot_DC_trap, :trig_max_DC_trap]
+        :trig_pos_trap, :trig_pos_tot_trap, :trig_max_trap,
+        :trig_pos_DC_trap, :trig_pos_tot_DC_trap, :trig_max_DC_trap]
     for k in expected_keys
         @test hasproperty(result, k)
     end
