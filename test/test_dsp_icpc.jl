@@ -180,7 +180,7 @@ end
                     :e_10410, :e_313, :e_trap, :e_cusp, :e_zac,
                     :qdrift, :lq, :a_sg,
                     :n_sat_low, :n_sat_high,
-                    :inTrace_intersect, :inTrace_n,
+                    :trigger_position, :trigger_multiplicity,
                     :e_10410_inv, :e_313_inv, :t0_inv]
             @test col in cols
         end

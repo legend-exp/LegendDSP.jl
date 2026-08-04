@@ -11,6 +11,7 @@ Test.@testset "Package LegendDSP" begin
     include("test_timeaxis.jl")
     include("test_docs.jl")
     include("test_alternative_filters.jl")
+    include("test_dsp_routines.jl")
     include("test_dsp_icpc.jl")
     include("test_thresholdstats.jl")
     include("test_dsp_sipm.jl")
