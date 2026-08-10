@@ -65,19 +65,43 @@ end
 export get_qdrift
 
 """
-    get_intracePileUp(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
+    get_triggers_reversed((wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
 
-Get position and multiplicity of in-trace pile-up as intersect of reversed derivative signal with threshold as multiple of std. The `wvfs` have to be a current signal.
+Determine trigger positions and multiplicities from waveforms.
+
+The triggers are identified as intersections of the reversed signal with a threshold defined as a multiple of the baseline standard deviation within `bl_window`.
+
+Returns a named tuple containing the trigger positions (`intersect`) and the corresponding trigger multiplicities (`n`).
 """
-function get_intracePileUp(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
-    # get position and multiplicity of in-trace pile-up as intersect of reversed derivative signal with threshold as multiple of std
+function get_triggers_reversed(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
     flt_intersec_inTrace = Intersect(mintot = mintot)
     thres = signalstats.(wvfs, leftendpoint(bl_window) + first(wvfs[1].time), rightendpoint(bl_window)).sigma .* sigma_threshold
     # replace with high threshold if all values are saturated
     replace!(thres, zero(thres[1]) => one(thres[1]))
 
-    inTrace_pileUp       = flt_intersec_inTrace.(reverse_waveform.(wvfs), thres)
-    # return intersect position measured from the non-reversed waveform and multiplicity
+    inTrace_pileUp = flt_intersec_inTrace.(reverse_waveform.(wvfs), thres)
+
     (intersect = last(wvfs[1].time) .- inTrace_pileUp.x, n = inTrace_pileUp.multiplicity)
 end
-export get_intracePileUp
+export get_triggers_reversed
+
+"""
+    get_triggers(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
+
+Determine trigger positions and multiplicities from waveforms.
+
+The triggers are identified as intersections of the signal with a threshold defined as a multiple of the baseline standard deviation within `bl_window`.
+
+Returns a named tuple containing the trigger positions (`intersect`) and the corresponding trigger multiplicities (`n`).
+"""
+function get_triggers(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
+    flt_intersec_inTrace = Intersect(mintot = mintot)
+    thres = signalstats.(wvfs, leftendpoint(bl_window) + first(wvfs[1].time), rightendpoint(bl_window)).sigma .* sigma_threshold
+    # replace with high threshold if all values are saturated
+    replace!(thres, zero(thres[1]) => one(thres[1]))
+
+    inTrace_pileUp = flt_intersec_inTrace.(wvfs, thres)
+
+    (intersect = inTrace_pileUp.x, n = inTrace_pileUp.multiplicity)
+end
+export get_triggers
