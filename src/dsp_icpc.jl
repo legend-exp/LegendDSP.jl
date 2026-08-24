@@ -37,6 +37,8 @@ The output data is a table with the following columns:
 - `e_min`: minimum of waveform
 - `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313`: energy of waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
+- `e_101010`: energy of waveform with trapezoidal filter of 10µs rise time with 10µs flat-top
+- `a_raw_48`, `a_raw_96`, `a_raw_144`: maximum of the raw current (simple derivative) after moving-window-average shaping with 48/96/144 ns windows
 - `e_10410_inv`: maximum of inverted waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313_inv`: maximum of inverted waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
 - `t0_inv`: start time of inverted waveform drift
@@ -153,6 +155,9 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
     e_313  = maximum.((uflt_313.(wvfs)).signal)
 
+    uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
+    e_101010  = maximum.((uflt_101010.(wvfs)).signal)
+
     # signal estimator for precise energy reconstruction
     signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
 
@@ -183,7 +188,11 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     a_60 = get_wvf_maximum.(SavitzkyGolayFilter(60u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
     a_100 = get_wvf_maximum.(SavitzkyGolayFilter(100u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
-    a_raw = get_wvf_maximum.(DerivativeFilter(1).(wvfs), leftendpoint(current_window), rightendpoint(current_window))
+    wvfs_deriv = DerivativeFilter(1).(wvfs)
+    a_raw = get_wvf_maximum.(wvfs_deriv, leftendpoint(current_window), rightendpoint(current_window))
+    a_raw_48  = get_wvf_maximum.(MovingWindowMultiFilter(48u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
+    a_raw_96  = get_wvf_maximum.(MovingWindowMultiFilter(96u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
+    a_raw_144 = get_wvf_maximum.(MovingWindowMultiFilter(144u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
 
     # get in-trace pile-up
     inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
@@ -215,7 +224,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     drift_time = drift_time,
     tail_τ = tail_stats.τ, tail_mean = tail_stats.mean, tail_sigma = tail_stats.sigma,
     e_max = wvf_max, e_min = wvf_min,
-    e_10410 = e_10410, e_535 = e_535, e_313 = e_313,
+    e_10410 = e_10410, e_535 = e_535, e_313 = e_313, e_101010 = e_101010,
     e_10410_inv = e_10410_max_inv, e_313_inv = e_313_max_inv,
     t0_inv = t0_inv,
     e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
@@ -223,6 +232,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
     qdrift = qdrift, lq = lq,
     a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
+        a_raw_48 = a_raw_48, a_raw_96 = a_raw_96, a_raw_144 = a_raw_144,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
     inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
     n_sat_low = sat_stats.low, n_sat_high = sat_stats.high, n_sat_low_cons = sat_stats.max_cons_low, n_sat_high_cons = sat_stats.max_cons_high
@@ -268,6 +278,8 @@ The output data is a table with the following columns:
 - `e_min`: minimum of waveform
 - `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313`: energy of waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
+- `e_101010`: energy of waveform with trapezoidal filter of 10µs rise time with 10µs flat-top
+- `a_raw_48`, `a_raw_96`, `a_raw_144`: maximum of the raw current (simple derivative) after moving-window-average shaping with 48/96/144 ns windows
 - `e_10410_inv`: maximum of inverted waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313_inv`: maximum of inverted waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
 - `t0_inv`: start time of inverted waveform drift
@@ -403,6 +415,9 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
     e_313  = maximum.((uflt_313.(wvfs_pre)).signal)
 
+    uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
+    e_101010  = maximum.((uflt_101010.(wvfs_pre)).signal)
+
     # signal estimator for precise energy reconstruction
     signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
 
@@ -428,7 +443,11 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     e_zac_extremestats = extremestats.(wvfs_flt)
 
     # extract current with optimal SG filter length with second order polynominal and first derivative
-    a_raw = get_wvf_maximum.(DerivativeFilter(1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
+    wvfs_deriv = DerivativeFilter(1).(wvfs_wdw)
+    a_raw = get_wvf_maximum.(wvfs_deriv, leftendpoint(current_window), rightendpoint(current_window))
+    a_raw_48  = get_wvf_maximum.(MovingWindowMultiFilter(48u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
+    a_raw_96  = get_wvf_maximum.(MovingWindowMultiFilter(96u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
+    a_raw_144 = get_wvf_maximum.(MovingWindowMultiFilter(144u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
 
     a_sg = get_wvf_maximum.(SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
     a_60 = get_wvf_maximum.(SavitzkyGolayFilter(60u"ns", sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
@@ -483,7 +502,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99, t50_pre = t50_pre,
         drift_time = drift_time, t50_current = t50_current,
         # energies (fixed and trap/cusp/zac) & extrema of trap/cusp/zac 
-        e_10410 = e_10410, e_535 = e_535, e_313 = e_313,
+        e_10410 = e_10410, e_535 = e_535, e_313 = e_313, e_101010 = e_101010,
         e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
         e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
         t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
@@ -491,6 +510,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         qdrift = qdrift, lq = lq,
         # currents & Pileup
         a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
+        a_raw_48 = a_raw_48, a_raw_96 = a_raw_96, a_raw_144 = a_raw_144,
         inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
         # inverse parameters
         e_10410_inv = e_10410_max_inv, e_313_inv = e_313_max_inv,
