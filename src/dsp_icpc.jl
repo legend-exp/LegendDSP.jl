@@ -352,12 +352,11 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     # get QC classifier labels (skip expensive ML classification if no model)
     qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)) : fill(-1, length(wvfs_pre))
     
-    # get wvf maximum
-    wvf_max_pre = maximum.(wvfs_pre.signal)
-    wvf_min_pre = minimum.(wvfs_pre.signal)
-    
-    wvf_max_wdw = maximum.(wvfs_wdw.signal)
-    wvf_min_wdw = minimum.(wvfs_wdw.signal)
+    # get wvf extremestats
+    wvf_pre_extremestats = extremestats.(wvfs_pre)
+    wvf_wdw_extremestats = extremestats.(wvfs_wdw)
+    wvf_max_pre = wvf_pre_extremestats.max
+    wvf_max_wdw = wvf_wdw_extremestats.max
 
     # extract decay times
     tail_stats = tailstats.(wvfs_pre, leftendpoint(tail_window), rightendpoint(tail_window))
@@ -395,13 +394,13 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
-    e_10410  = maximum.((uflt_10410.(wvfs_pre)).signal)
+    e_10410_stats  = extremestats.(uflt_10410.(wvfs_pre))
     
     uflt_535 = TrapezoidalChargeFilter(5u"µs", 3u"µs")
-    e_535  = maximum.((uflt_535.(wvfs_pre)).signal)
+    e_535_stats  = extremestats.(uflt_535.(wvfs_pre))
     
     uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
-    e_313  = maximum.((uflt_313.(wvfs_pre)).signal)
+    e_313_stats  = extremestats.(uflt_313.(wvfs_pre))
 
     # signal estimator for precise energy reconstruction
     signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
@@ -436,10 +435,15 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     # get in-trace pile-up
     # The window length is scaled with the half presum rate to account for the fact that the waveform is presummed
-    wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl * presum_rate_value / 2, sg_flt_degree, 1).(wvfs_pre)
-    inTrace_pileUp = get_intracePileUp(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
+
     
+    # alternative with trapezoidal filter
+    trig_flt = TrapezoidalChargeFilter(2u"µs", 1u"µs")
+    wvfs_trigflt = trig_flt.(wvfs_pre)
+    triggers = get_triggers(wvfs_trigflt, inTraceCut_std_threshold, bl_window; mintot=2.0u"µs")
+
     # get position of current rise
+    wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl * presum_rate_value / 2, sg_flt_degree, 1).(wvfs_pre)
     thres = maximum.(wvfs_sgflt_deriv.signal) .* 0.5
 
     t50_current = get_threshold(wvfs_sgflt_deriv, thres; mintot=config.kwargs_pars.tx_mintot)
@@ -454,7 +458,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     e_313_max_inv  = maximum.(uflt_313.(wvfs_pre).signal)
 
-    # t0 determination
+    # inv t0 determination
     t0_inv = get_t0(wvfs_wdw, t0_threshold; mintot=config.kwargs_pars.t0_mintot)
 
     # output Table 
@@ -471,8 +475,9 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         auxbl2_mean = auxbl2_stats.mean, auxbl2_sigma = auxbl2_stats.sigma, auxbl2_slope_sigma = auxbl2_stats.slope_residual_sigma,
         # ML QC label
         qc_label = qc_labels,
-        # waveform extrema 
-        e_max = wvf_max_wdw, e_min = wvf_min_wdw, e_max_pre = wvf_max_pre, e_min_pre = wvf_min_pre,
+        # waveform extrema and timepoints
+        e_max = wvf_pre_extremestats.max, e_min = wvf_wdw_extremestats.min, t_max = wvf_pre_extremestats.tmax, t_min = wvf_wdw_extremestats.tmin,
+        e_max_pre = wvf_pre_extremestats.max, e_min_pre = wvf_pre_extremestats.min, t_max_pre = wvf_pre_extremestats.tmax, t_min_pre = wvf_pre_extremestats.tmin,
         # tail parameters
         tailmean = pz_stats.mean, tailsigma = pz_stats.sigma, tailslope = pz_stats.slope, tailoffset = pz_stats.offset,
         tail_τ = tail_stats.τ, tail_mean = tail_stats.mean, tail_sigma = tail_stats.sigma,
@@ -483,15 +488,17 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99, t50_pre = t50_pre,
         drift_time = drift_time, t50_current = t50_current,
         # energies (fixed and trap/cusp/zac) & extrema of trap/cusp/zac 
-        e_10410 = e_10410, e_535 = e_535, e_313 = e_313,
+        e_10410 = e_10410_stats.max, e_535 = e_535_stats.max, e_313 = e_313_stats.max,
+        t_10410 = e_10410_stats.tmax, t_535 = e_535_stats.tmax, t_313 = e_313_stats.tmax,
         e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
         e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
         t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
         # Qdrift & LQ
         qdrift = qdrift, lq = lq,
-        # currents & Pileup
+        # currents
         a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
-        inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
+        # trigger
+        trigger_position = triggers.intersect, trigger_multiplicity = triggers.n,
         # inverse parameters
         e_10410_inv = e_10410_max_inv, e_313_inv = e_313_max_inv,
         t0_inv = t0_inv,
