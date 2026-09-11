@@ -52,6 +52,10 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         dsp_metadata.e_grid_cusp.ft.start:dsp_metadata.e_grid_cusp.ft.step:dsp_metadata.e_grid_cusp.ft.stop,
         # window length grid scan range for SG filter in current determination
         dsp_metadata.a_grid_wl_sg.start:dsp_metadata.a_grid_wl_sg.step:dsp_metadata.a_grid_wl_sg.stop,
+        # window length grid scan range for MWA filter in current determination (falls back to the SG grid)
+        let g = get(dsp_metadata, :a_grid_wl_mwa, dsp_metadata.a_grid_wl_sg)
+            g.start:g.step:g.stop
+        end,
         
         # flt defaults
         dsp_metadata.flt_defaults,
@@ -70,7 +74,7 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
 end
 
 function get_fltpars(pd::PropDict, flt::Symbol, dspconfig::DSPConfig)
-    if flt == :sg
+    if flt == :sg || flt == :mwa
         return get(get(pd, flt, PropDict()), :wl, dspconfig.default_flt_param[flt])
     else
         if !(haskey(pd, flt))

@@ -137,8 +137,15 @@ function make_fake_config()
             :step  => 32.0u"ns",
         ),
 
+        :a_grid_wl_mwa => PropDict(
+            :start => 16.0u"ns",
+            :stop  => 576.0u"ns",
+            :step  => 16.0u"ns",
+        ),
+
         :flt_defaults => PropDict(
             :sg   => 100.0u"ns",
+            :mwa  => 96.0u"ns",
             :trap => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
             :zac  => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
             :cusp => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
@@ -177,8 +184,8 @@ end
         for col in [:blmean, :blsigma, :blslope, :bloffset,
                     :tailmean, :tailsigma, :tailslope, :tailoffset,
                     :t0, :t50, :t90, :drift_time,
-                    :e_10410, :e_313, :e_trap, :e_cusp, :e_zac,
-                    :qdrift, :lq, :a_sg,
+                    :e_10410, :e_313, :e_101010, :e_trap, :e_cusp, :e_zac,
+                    :qdrift, :lq, :a_sg, :a_raw, :a_mwa, :a_mwa_48, :a_mwa_288, :a_mwa_576,
                     :n_sat_low, :n_sat_high,
                     :trigger_position, :trigger_multiplicity,
                     :e_10410_inv, :e_313_inv, :t0_inv]
@@ -193,8 +200,42 @@ end
     end
 
     @testset "Energies finite" begin
-        for col in [:e_10410, :e_313, :e_trap]
+        for col in [:e_10410, :e_313, :e_101010, :e_trap]
             @test all(isfinite, ustrip.(getproperty(result, col)))
         end
     end
+end
+
+
+@testset "dsp_mwa_optimization_compressed" begin
+    data   = make_fake_data(3)
+    config = make_fake_config()
+    τ      = 500u"µs"
+    pars_filter = PropDict(:trap => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"))
+
+    result = dsp_mwa_optimization_compressed(data.waveform_windowed, data.waveform_presummed, config, τ, pars_filter; presum_rate = 1)
+
+    @test result isa TypedTables.Table
+    @test length(result) == 3
+    @test all(length.(result.aoe) .== length(config.a_grid_wl_mwa))
+    @test all(all.(isfinite, result.aoe))
+    @test all(isfinite, ustrip.(result.energy))
+    @test all(result.qc_label .== -1)
+end
+
+
+@testset "dsp_mwa_optimization" begin
+    data   = make_fake_data(3)
+    config = make_fake_config()
+    τ      = 500u"µs"
+    pars_filter = PropDict(:trap => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"))
+
+    result = dsp_mwa_optimization(data.waveform_windowed, config, τ, pars_filter)
+
+    @test result isa TypedTables.Table
+    @test length(result) == 3
+    @test all(length.(result.aoe) .== length(config.a_grid_wl_mwa))
+    @test all(all.(isfinite, result.aoe))
+    @test all(isfinite, ustrip.(result.energy))
+    @test all(result.qc_label .== -1)
 end
