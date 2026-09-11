@@ -78,6 +78,9 @@ struct DSPConfig{T <: Real}
     # window length grid scan range for SG filter in current determination
     a_grid_wl_sg::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
 
+    # window length grid scan range for MWA filter in current determination
+    a_grid_wl_mwa::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
+
     # default filter parameter
     default_flt_param::PropDict
 

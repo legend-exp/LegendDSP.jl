@@ -510,3 +510,137 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
                 )
 end
 export dsp_sg_optimization_compressed
+
+"""
+    dsp_mwa_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
+
+Optimize the window length of the MWA current filter (`MovingWindowMultiFilter` on the
+simple-derivative current) for the A/E parameter, same scheme as `dsp_sg_optimization`.
+
+# Arguments
+    - `f_evaluate_qc`: Optional ML QC evaluation function. If missing, default qc_label=-1 is used.
+
+# Returns
+    - `aoe`: A/E values for each MWA window length in `config.a_grid_wl_mwa`
+    - `energy`: Array of energy values
+    - `blmean`: Baseline mean value
+    - `blslope`: Baseline slope value
+    - `t50`: 50% rise time of the waveform
+    - `qc_label`: QC labels (-1 if no ML model available)
+"""
+function dsp_mwa_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
+    # get config parameters
+    bl_window      = config.bl_window
+    a_grid_wl_mwa  = config.a_grid_wl_mwa
+    current_window = config.current_window
+
+    # get optimal filter parameters
+    rt = pars_filter.trap.rt
+    ft = pars_filter.trap.ft
+
+    # get baseline mean, std and slope
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
+
+    # substract baseline from waveforms
+    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+
+    # get QC classifier labels (skip expensive ML classification if no model)
+    qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier(wvfs, f_evaluate_qc)) : fill(-1, length(wvfs))
+
+    # deconvolute waveform
+    deconv_flt = InvCRFilter(τ)
+    wvfs = deconv_flt.(wvfs)
+
+    # get signal estimator
+    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
+
+    # t50 determination
+    t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+
+    # get energy for filter parameters
+    uflt_rtft = TrapezoidalChargeFilter(rt, ft)
+    e_rtft    = signal_estimator.(uflt_rtft.(wvfs), t50 .+ (rt + ft/2))
+
+    # current from the simple derivative, MWA-shaped with the window length in the grid
+    # (same chain as the a_mwa column in `dsp_icpc`)
+    wvfs_deriv = DerivativeFilter(1).(wvfs)
+    aoe_grid   = ones(Float64, length(a_grid_wl_mwa), length(wvfs))
+    for (w, wl) in enumerate(a_grid_wl_mwa)
+        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
+        aoe_grid[w, :] = ustrip.(a_mwa) ./ e_rtft
+    end
+    return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft,
+        blmean = bl_stats.mean, blslope = bl_stats.slope,
+        t50 = t50,
+        qc_label = qc_labels
+    )
+end
+export dsp_mwa_optimization
+
+"""
+    dsp_mwa_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing)
+
+Optimize the window length of the MWA current filter (`MovingWindowMultiFilter` on the
+simple-derivative current) for the A/E parameter, same scheme as `dsp_sg_optimization_compressed`.
+
+# Returns
+    - `aoe`: A/E values for each MWA window length in `config.a_grid_wl_mwa`
+    - `energy`: Array of energy values
+    - `blmean`: Baseline mean value
+    - `blslope`: Baseline slope value
+    - `t50`: 50% rise time of the presummed waveform
+    - `qc_label`: QC labels (-1 if no ML model available)
+"""
+function dsp_mwa_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
+    # get config parameters
+    bl_window      = config.bl_window
+    a_grid_wl_mwa  = config.a_grid_wl_mwa
+    current_window = config.current_window
+
+    # get optimal filter parameters
+    rt = pars_filter.trap.rt
+    ft = pars_filter.trap.ft
+
+    # get baseline mean, std and slope
+    bl_stats = signalstats.(wvfs_pre, leftendpoint(bl_window), rightendpoint(bl_window))
+
+    # substract baseline from waveforms
+    wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
+    wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate)
+
+    # get QC classifier labels (skip expensive ML classification if no model)
+    qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)) : fill(-1, length(wvfs_pre))
+
+    # deconvolute waveform
+    deconv_flt = InvCRFilter(τ)
+    wvfs_pre = deconv_flt.(wvfs_pre)
+    wvfs_wdw = deconv_flt.(wvfs_wdw)
+
+    # get wvf maximum
+    wvf_max_pre = maximum.(wvfs_pre.signal)
+
+    # get signal estimator
+    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
+
+    # t50 determination
+    t50_pre = get_threshold(wvfs_pre, wvf_max_pre .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+
+    # get energy for filter parameters
+    uflt_rtft = TrapezoidalChargeFilter(rt, ft)
+    e_rtft    = signal_estimator.(uflt_rtft.(wvfs_pre), t50_pre .+ (rt + ft/2))
+
+    # current from the simple derivative, MWA-shaped with the window length in the grid
+    # (same chain as the a_mwa column in `dsp_icpc`)
+    wvfs_deriv = DerivativeFilter(1).(wvfs_wdw)
+    aoe_grid   = ones(Float64, length(a_grid_wl_mwa), length(wvfs_wdw))
+    for (w, wl) in enumerate(a_grid_wl_mwa)
+        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
+        aoe_grid[w, :] = ustrip.(a_mwa) ./ e_rtft
+    end
+    return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft,
+                blmean = bl_stats.mean, blslope = bl_stats.slope,
+                t50 = t50_pre,
+                qc_label = qc_labels
+                )
+end
+export dsp_mwa_optimization_compressed
