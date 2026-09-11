@@ -145,6 +145,7 @@ function make_fake_config()
 
         :flt_defaults => PropDict(
             :sg   => 100.0u"ns",
+            :mwa  => 96.0u"ns",
             :trap => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
             :zac  => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
             :cusp => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
@@ -184,7 +185,7 @@ end
                     :tailmean, :tailsigma, :tailslope, :tailoffset,
                     :t0, :t50, :t90, :drift_time,
                     :e_10410, :e_313, :e_trap, :e_cusp, :e_zac,
-                    :qdrift, :lq, :a_sg,
+                    :qdrift, :lq, :a_sg, :a_raw, :a_mwa, :a_mwa_48, :a_mwa_288, :a_mwa_576,
                     :n_sat_low, :n_sat_high,
                     :trigger_position, :trigger_multiplicity,
                     :e_10410_inv, :e_313_inv, :t0_inv]
