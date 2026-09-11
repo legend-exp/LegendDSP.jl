@@ -184,7 +184,7 @@ end
         for col in [:blmean, :blsigma, :blslope, :bloffset,
                     :tailmean, :tailsigma, :tailslope, :tailoffset,
                     :t0, :t50, :t90, :drift_time,
-                    :e_10410, :e_313, :e_trap, :e_cusp, :e_zac,
+                    :e_10410, :e_313, :e_101010, :e_trap, :e_cusp, :e_zac,
                     :qdrift, :lq, :a_sg, :a_raw, :a_mwa, :a_mwa_48, :a_mwa_288, :a_mwa_576,
                     :n_sat_low, :n_sat_high,
                     :trigger_position, :trigger_multiplicity,
@@ -200,7 +200,7 @@ end
     end
 
     @testset "Energies finite" begin
-        for col in [:e_10410, :e_313, :e_trap]
+        for col in [:e_10410, :e_313, :e_101010, :e_trap]
             @test all(isfinite, ustrip.(getproperty(result, col)))
         end
     end

@@ -37,6 +37,7 @@ The output data is a table with the following columns:
 - `e_min`: minimum of waveform
 - `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313`: energy of waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
+- `e_101010`: energy of waveform with trapezoidal filter of 10µs rise time with 10µs flat-top
 - `a_mwa`: maximum of the raw current (simple derivative) after moving-window-average shaping with the optimized window length from the `aoeopt` pars
 - `a_mwa_48`, `a_mwa_288`, `a_mwa_576`: maximum of the raw current (simple derivative) after moving-window-average shaping with fixed 48/288/576 ns windows
 - `e_10410_inv`: maximum of inverted waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
@@ -156,6 +157,9 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
     e_313  = maximum.((uflt_313.(wvfs)).signal)
 
+    uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
+    e_101010  = maximum.((uflt_101010.(wvfs)).signal)
+
     # signal estimator for precise energy reconstruction
     signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
 
@@ -223,7 +227,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     drift_time = drift_time,
     tail_τ = tail_stats.τ, tail_mean = tail_stats.mean, tail_sigma = tail_stats.sigma,
     e_max = wvf_max, e_min = wvf_min,
-    e_10410 = e_10410, e_535 = e_535, e_313 = e_313,
+    e_10410 = e_10410, e_535 = e_535, e_313 = e_313, e_101010 = e_101010,
     e_10410_inv = e_10410_max_inv, e_313_inv = e_313_max_inv,
     t0_inv = t0_inv,
     e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
@@ -277,6 +281,7 @@ The output data is a table with the following columns:
 - `e_min`: minimum of waveform
 - `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313`: energy of waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
+- `e_101010`: energy of waveform with trapezoidal filter of 10µs rise time with 10µs flat-top
 - `a_mwa`: maximum of the raw current (simple derivative) after moving-window-average shaping with the optimized window length from the `aoeopt` pars
 - `a_mwa_48`, `a_mwa_288`, `a_mwa_576`: maximum of the raw current (simple derivative) after moving-window-average shaping with fixed 48/288/576 ns windows
 - `e_10410_inv`: maximum of inverted waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
@@ -414,6 +419,9 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
     e_313_stats  = extremestats.(uflt_313.(wvfs_pre))
 
+    uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
+    e_101010_stats  = extremestats.(uflt_101010.(wvfs_pre))
+
     # signal estimator for precise energy reconstruction
     signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
 
@@ -505,8 +513,8 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99, t50_pre = t50_pre,
         drift_time = drift_time, t50_current = t50_current,
         # energies (fixed and trap/cusp/zac) & extrema of trap/cusp/zac 
-        e_10410 = e_10410_stats.max, e_535 = e_535_stats.max, e_313 = e_313_stats.max,
-        t_10410 = e_10410_stats.tmax, t_535 = e_535_stats.tmax, t_313 = e_313_stats.tmax,
+        e_10410 = e_10410_stats.max, e_535 = e_535_stats.max, e_313 = e_313_stats.max, e_101010 = e_101010_stats.max,
+        t_10410 = e_10410_stats.tmax, t_535 = e_535_stats.tmax, t_313 = e_313_stats.tmax, t_101010 = e_101010_stats.tmax,
         e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
         e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
         t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
