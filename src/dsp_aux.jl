@@ -133,3 +133,50 @@ function dsp_puls_compressed(data::Q, config::DSPConfig) where {Q <: Table}
     )
 end
 export dsp_puls_compressed
+
+
+"""
+    aux_dsp(data::Q, config::DSPConfig) where {Q <: Table}
+
+DSP for auxiliary channels whose waveforms are spikes. The raw waveform is not
+baseline-subtracted or filtered. For each waveform, the maximum sample and its
+time are returned as `e_max` and `t_max`.
+
+The `config` argument is accepted for consistency with the other detector DSP
+entry points but is not used.
+"""
+function aux_dsp(data::Q, ::DSPConfig) where {Q <: Table}
+    extrema = extremestats.(data.waveform)
+
+    TypedTables.Table(
+        e_max = extrema.max,
+        t_max = extrema.tmax,
+        blfc = data.baseline,
+        timestamp = data.timestamp,
+        eventID_fadc = data.eventnumber,
+        e_fc = data.daqenergy,
+    )
+end
+export aux_dsp
+
+
+"""
+    aux_dsp_compressed(data::Q, config::DSPConfig) where {Q <: Table}
+
+Compressed-data variant of [`aux_dsp`](@ref). The presummed waveforms are
+decoded before their unmodified maxima and maximum times are determined.
+"""
+function aux_dsp_compressed(data::Q, ::DSPConfig) where {Q <: Table}
+    wvfs = decode_data(data.waveform_presummed)
+    extrema = extremestats.(wvfs)
+
+    TypedTables.Table(
+        e_max = extrema.max,
+        t_max = extrema.tmax,
+        blfc = data.baseline,
+        timestamp = data.timestamp,
+        eventID_fadc = data.eventnumber,
+        e_fc = data.daqenergy,
+    )
+end
+export aux_dsp_compressed
