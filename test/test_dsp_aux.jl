@@ -71,3 +71,39 @@ end
     end
 end
 
+@testset "pulser DSP" begin
+    compressed_data = make_fake_data(3)
+    data = Table(
+        waveform = compressed_data.waveform_presummed,
+        baseline = compressed_data.baseline,
+        timestamp = compressed_data.timestamp,
+        eventnumber = compressed_data.eventnumber,
+        daqenergy = compressed_data.daqenergy,
+    )
+    config = make_fake_config()
+
+    for (name, result) in (
+        "uncompressed waveforms" => dsp_puls(data, config),
+        "compressed waveforms" => dsp_puls_compressed(compressed_data, config),
+    )
+        @testset "$name" begin
+            @test result isa TypedTables.Table
+            @test length(result) == 3
+            @test columnnames(result) == (
+                :blmean, :blsigma, :blslope, :bloffset, :t50,
+                :e_max, :e_10410, :blfc, :timestamp, :eventID_fadc, :e_fc,
+            )
+            @test all(isapprox.(result.blmean, 1000; atol = 1e-10))
+            @test all(isfinite, result.blsigma)
+            @test all(isfinite, result.blslope)
+            @test all(isfinite, result.bloffset)
+            @test all(48u"μs" .< result.t50 .< 50u"μs")
+            @test all(result.e_max .> 9_900)
+            @test all(result.e_10410 .> 0)
+            @test result.blfc == data.baseline
+            @test result.timestamp == data.timestamp
+            @test result.eventID_fadc == data.eventnumber
+            @test result.e_fc == data.daqenergy
+        end
+    end
+end
