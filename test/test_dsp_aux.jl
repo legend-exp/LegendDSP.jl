@@ -33,7 +33,7 @@ end
     expected_t_max = [32, 16, 16]u"ns"
 
     @testset "uncompressed waveforms" begin
-        result = aux_dsp(data, config)
+        result = dsp_aux(data, config)
 
         @test result isa TypedTables.Table
         @test length(result) == 3
@@ -49,7 +49,7 @@ end
     end
 
     @testset "compressed waveforms" begin
-        result = aux_dsp_compressed(data, config)
+        result = dsp_aux_compressed(data, config)
 
         @test result isa TypedTables.Table
         @test length(result) == 3
@@ -66,8 +66,8 @@ end
 
     @testset "maxima use raw samples" begin
         # A baseline subtraction would produce 25, 32, and 3 instead.
-        @test aux_dsp(data, config).e_max == expected_e_max
-        @test aux_dsp_compressed(data, config).e_max == expected_e_max
+        @test dsp_aux(data, config).e_max == expected_e_max
+        @test dsp_aux_compressed(data, config).e_max == expected_e_max
     end
 end
 
