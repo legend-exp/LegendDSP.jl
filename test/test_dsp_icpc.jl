@@ -183,9 +183,10 @@ end
         cols = columnnames(result)
         for col in [:blmean, :blsigma, :blslope, :bloffset,
                     :tailmean, :tailsigma, :tailslope, :tailoffset,
-                    :t0, :t50, :t90, :drift_time,
+                    :t0, :t50, :t90, :drift_time, :t_amax,
                     :e_10410, :e_313, :e_101010, :e_trap, :e_cusp, :e_zac,
-                    :qdrift, :lq, :a_sg, :a_raw, :a_mwa, :a_mwa_48, :a_mwa_288, :a_mwa_576,
+                    :qdrift, :lq_80, :lq_90, :lq_amax,
+                    :a_sg, :a_raw, :a_mwa, :a_mwa_48, :a_mwa_288, :a_mwa_576,
                     :n_sat_low, :n_sat_high,
                     :trigger_position, :trigger_multiplicity,
                     :e_10410_inv, :e_313_inv, :t0_inv]
@@ -197,6 +198,7 @@ end
         @test all(result.t0  .< result.t50)
         @test all(result.t50 .< result.t90)
         @test all(ustrip.(result.drift_time) .>= 0)
+        @test all(first(data.waveform_windowed[1].time) .<= result.t_amax .<= last(data.waveform_windowed[1].time))
     end
 
     @testset "Energies finite" begin
