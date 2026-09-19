@@ -291,7 +291,9 @@ The output data is a table with the following columns:
 - `e_cusp`: energy of waveform with CUSP filter of optimized rise and flat-top time
 - `e_zac`: energy of waveform with ZAC filter of optimized rise and flat-top time
 - `qdrift`: Q-drift parameter
-- `lq`: LQ parameter
+- `lq_80`: LQ parameter evaluated at `t80`
+- `lq_90`: LQ parameter evaluated at `t90`
+- `lq_amax`: LQ parameter evaluated at `t_amax`
 - `a`: current maximum with optimal Savitzky-Golay filter length parameter
 - `blfc`: baseline from FADC
 - `timestamp`: timestamp from FADC
@@ -403,11 +405,17 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     
     drift_time = uconvert.(u"ns", t90 - t0)
 
+    # get t_amax
+    wvfs_deriv = DerivativeFilter(1).(wvfs_wdw)
+    t_amax = extremestats.(wvfs_deriv).tmax
+
     # get Q-drift parameter
     qdrift = get_qdrift(wvfs_wdw, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
-    # get LQ parameter
-    lq  = get_qdrift(wvfs_wdw, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    # get LQ parameters
+    lq_80 = get_qdrift(wvfs_wdw, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_90 = get_qdrift(wvfs_wdw, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_amax = get_qdrift(wvfs_wdw, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
@@ -447,7 +455,6 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     e_zac_extremestats = extremestats.(wvfs_flt)
 
     # extract current with optimal SG filter length with second order polynominal and first derivative
-    wvfs_deriv = DerivativeFilter(1).(wvfs_wdw)
     a_raw = get_wvf_maximum.(wvfs_deriv, leftendpoint(current_window), rightendpoint(current_window))
     a_mwa_48  = get_wvf_maximum.(MovingWindowMultiFilter(48u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
     a_mwa_288 = get_wvf_maximum.(MovingWindowMultiFilter(288u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
@@ -458,11 +465,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     a_60 = get_wvf_maximum.(SavitzkyGolayFilter(60u"ns", sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
     a_100 = get_wvf_maximum.(SavitzkyGolayFilter(100u"ns", sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
 
-    # get in-trace pile-up
-    # The window length is scaled with the half presum rate to account for the fact that the waveform is presummed
-
-    
-    # alternative with trapezoidal filter
+    # Trigger filter with trapezoidal filter
     trig_flt = TrapezoidalChargeFilter(2u"µs", 1u"µs")
     wvfs_trigflt = trig_flt.(wvfs_pre)
     triggers = get_triggers(wvfs_trigflt, inTraceCut_std_threshold, bl_window; mintot=2.0u"µs")
@@ -511,7 +514,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         auxpz2_mean = auxpz2_stats.mean, auxpz2_sigma = auxpz2_stats.sigma, auxpz2_slope_sigma = auxpz2_stats.slope_residual_sigma,
         # timing parameters
         t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99, t50_pre = t50_pre,
-        drift_time = drift_time, t50_current = t50_current,
+        drift_time = drift_time, t50_current = t50_current, t_amax = t_amax,
         # energies (fixed and trap/cusp/zac) & extrema of trap/cusp/zac 
         e_10410 = e_10410_stats.max, e_535 = e_535_stats.max, e_313 = e_313_stats.max, e_101010 = e_101010_stats.max,
         t_10410 = e_10410_stats.tmax, t_535 = e_535_stats.tmax, t_313 = e_313_stats.tmax, t_101010 = e_101010_stats.tmax,
@@ -519,7 +522,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
         t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
         # Qdrift & LQ
-        qdrift = qdrift, lq = lq,
+        qdrift = qdrift, lq_80 = lq_80, lq_90 = lq_90, lq_amax = lq_amax,
         # currents
         a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
         a_mwa = a_mwa, a_mwa_48 = a_mwa_48, a_mwa_288 = a_mwa_288, a_mwa_576 = a_mwa_576,
