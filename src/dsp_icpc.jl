@@ -309,8 +309,6 @@ The output data is a table with the following columns:
 function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where {Q <: Table, T<:Real}
     # get config parameters
     bl_window                = config.bl_window
-    auxbl1_window            = config.auxbl1_window
-    auxbl2_window            = config.auxbl2_window
     t0_threshold             = config.t0_threshold
     tail_window              = config.tail_window
     inTraceCut_std_threshold = config.inTraceCut_std_threshold
@@ -351,10 +349,6 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     sat_low, sat_high = 0, (2^bit_depth - bit_depth) * first(presum_rate_value)
     sat_stats = saturation.(wvfs_pre, sat_low, sat_high)
 
-    # auxiliary baseline determination
-    auxbl1_stats = signalstats.(wvfs_pre, leftendpoint(auxbl1_window), rightendpoint(auxbl1_window))
-    auxbl2_stats = signalstats.(wvfs_pre, leftendpoint(auxbl2_window), rightendpoint(auxbl2_window))
-
     # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
     τ_zac = 10000000.0u"µs"
@@ -378,14 +372,15 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     # extract decay times
     tail_stats = tailstats.(wvfs_pre, leftendpoint(tail_window), rightendpoint(tail_window))
 
-    auxpz1_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz1_window), rightendpoint(config.auxpz1_window))
-    auxpz2_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz2_window), rightendpoint(config.auxpz2_window))
-
     # deconvolute waveform 
     # --> wvfs = wvfs_pz
     deconv_flt = InvCRFilter(τ)
     wvfs_pre = deconv_flt.(wvfs_pre)
     wvfs_wdw = deconv_flt.(wvfs_wdw)
+
+    # auxiliary pz-corrected waveform window determination
+    auxpz1_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz1_window), rightendpoint(config.auxpz1_window))
+    auxpz2_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz2_window), rightendpoint(config.auxpz2_window))
 
     # get tail mean, std and slope
     pz_stats = signalstats.(wvfs_pre, leftendpoint(tail_window), rightendpoint(tail_window))
@@ -495,9 +490,6 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         t_sat_lo=t_sat_lo, t_sat_hi=t_sat_hi,
         # baseline 
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, bl_slope_sigma = bl_stats.slope_residual_sigma,
-        # aux baselines
-        auxbl1_mean = auxbl1_stats.mean, auxbl1_sigma = auxbl1_stats.sigma, auxbl1_slope_sigma = auxbl1_stats.slope_residual_sigma,
-        auxbl2_mean = auxbl2_stats.mean, auxbl2_sigma = auxbl2_stats.sigma, auxbl2_slope_sigma = auxbl2_stats.slope_residual_sigma,
         # ML QC label
         qc_label = qc_labels,
         # waveform extrema and timepoints

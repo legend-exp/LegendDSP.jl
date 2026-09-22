@@ -138,9 +138,9 @@ export dsp_puls_compressed
 """
     dsp_aux(data::Q, config::DSPConfig) where {Q <: Table}
 
-DSP for auxiliary channels whose waveforms are spikes. The raw waveform is not
-baseline-subtracted or filtered. For each waveform, the maximum sample and its
-time are returned as `e_max` and `t_max`.
+DSP for auxiliary channels whose waveforms are spikes. For each waveform, the
+baseline-subtracted maximum sample and its time are returned as `e_max` and
+`t_max`.
 
 The `config` argument is accepted for consistency with the other detector DSP
 entry points but is not used.
@@ -148,8 +148,10 @@ entry points but is not used.
 function dsp_aux(data::Q, ::DSPConfig) where {Q <: Table}
     extrema = extremestats.(data.waveform)
 
+    e_max = extrema.max .- data.baseline
+
     TypedTables.Table(
-        e_max = extrema.max,
+        e_max = e_max,
         t_max = extrema.tmax,
         blfc = data.baseline,
         timestamp = data.timestamp,
@@ -164,14 +166,17 @@ export dsp_aux
     dsp_aux_compressed(data::Q, config::DSPConfig) where {Q <: Table}
 
 Compressed-data variant of [`dsp_aux`](@ref). The presummed waveforms are
-decoded before their unmodified maxima and maximum times are determined.
+decoded before their maxima and maximum times are determined. Each baseline is
+scaled by the corresponding presumming rate before it is subtracted.
 """
 function dsp_aux_compressed(data::Q, ::DSPConfig) where {Q <: Table}
     wvfs = decode_data(data.waveform_presummed)
     extrema = extremestats.(wvfs)
 
+    e_max = extrema.max .- data.baseline .* data.presum_rate
+
     TypedTables.Table(
-        e_max = extrema.max,
+        e_max = e_max,
         t_max = extrema.tmax,
         blfc = data.baseline,
         timestamp = data.timestamp,

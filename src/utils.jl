@@ -62,12 +62,8 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         
         # flt parameters
         dsp_metadata.kwargs_pars,
-        
-        # auxiliary baseline windows
-        dsp_metadata.auxbl1_window.min .. dsp_metadata.auxbl1_window.max,
-        dsp_metadata.auxbl2_window.min .. dsp_metadata.auxbl2_window.max,
 
-
+        # auxiliary pz-corrected waveform windows
         dsp_metadata.auxpz1_window.min .. dsp_metadata.auxpz1_window.max,
         dsp_metadata.auxpz2_window.min .. dsp_metadata.auxpz2_window.max,
         )
