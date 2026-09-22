@@ -19,6 +19,7 @@ function make_aux_data()
     Table(
         waveform = StructArray(waveforms),
         waveform_presummed = StructArray(waveforms),
+        presum_rate = UInt8[8, 8, 8],
         baseline = Float32[100, 40, -8],
         timestamp = UInt64[11, 12, 13],
         eventnumber = UInt32[21, 22, 23],
@@ -29,7 +30,11 @@ end
 @testset "auxiliary DSP" begin
     data = make_aux_data()
     config = make_fake_config()
-    expected_e_max = [125, 72, -5]
+
+    # Raw maxima are [125, 72, -5].
+    # After subtracting baseline, the result is
+    # [125 - 8*100, 72 - 8*40, -5 - 8*(-8)].
+    expected_e_max = Float32[-675, -248, 59]
     expected_t_max = [32, 16, 16]u"ns"
 
     @testset "uncompressed waveforms" begin
@@ -64,8 +69,7 @@ end
         @test result.e_fc == data.daqenergy
     end
 
-    @testset "maxima use raw samples" begin
-        # A baseline subtraction would produce 25, 32, and 3 instead.
+    @testset "maxima include baseline subtraction" begin
         @test dsp_aux(data, config).e_max == expected_e_max
         @test dsp_aux_compressed(data, config).e_max == expected_e_max
     end

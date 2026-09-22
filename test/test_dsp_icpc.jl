@@ -67,15 +67,6 @@ function make_fake_config()
             :max => 62.0u"µs",
         ),
 
-        :auxbl1_window => PropDict(
-            :min => 0.0u"µs",
-            :max => 20.0u"µs",
-        ),
-        :auxbl2_window => PropDict(
-            :min => 20.0u"µs",
-            :max => 39.0u"µs",
-        ),
-
         :auxpz1_window => PropDict(
             :min => 70.0u"µs",
             :max => 90.0u"µs",

@@ -148,7 +148,7 @@ entry points but is not used.
 function dsp_aux(data::Q, ::DSPConfig) where {Q <: Table}
     extrema = extremestats.(data.waveform)
 
-    e_max = extrema.max .- (data.baseline .* 8)
+    e_max = extrema.max .- data.baseline
 
     TypedTables.Table(
         e_max = e_max,
@@ -172,7 +172,9 @@ function dsp_aux_compressed(data::Q, ::DSPConfig) where {Q <: Table}
     wvfs = decode_data(data.waveform_presummed)
     extrema = extremestats.(wvfs)
 
-    e_max = extrema.max .- (data.baseline .* 8)
+    presum_rate = data.presum_rate
+    presum_rate_value = only(unique(presum_rate))
+    e_max = extrema.max .- (data.baseline .* presum_rate_value)
 
     TypedTables.Table(
         e_max = e_max,
