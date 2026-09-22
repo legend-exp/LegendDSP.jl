@@ -405,9 +405,9 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     
     drift_time = uconvert.(u"ns", t90 - t0)
 
-    # get t_amax
+    # get t_amax with quadratic interpolation around the maximum current sample
     wvfs_deriv = DerivativeFilter(1).(wvfs_wdw)
-    t_amax = extremestats.(wvfs_deriv).tmax
+    t_amax = get_wvf_maximum_time.(wvfs_deriv, first(wvfs_deriv[1].time), last(wvfs_deriv[1].time))
 
     # get Q-drift parameter
     qdrift = get_qdrift(wvfs_wdw, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
