@@ -13,7 +13,9 @@ end
     get_wvf_maximum(signal::AbstractSamples, start::Real, stop::Real)
     get_wvf_maximum(signal::RDWaveform, start::RealQuantity, stop::RealQuantity)
 
-Get the maximum of a `signal` in the interval (`start`,`stop`) by quadaratic interpolation.
+Get the maximum of a `signal` and its time in the interval (`start`, `stop`) by quadratic interpolation.
+
+Returns `(max = ..., t = ...)`.
 """
 function get_wvf_maximum end
 export get_wvf_maximum
@@ -35,12 +37,16 @@ function _get_wvf_maximum_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuant
 
     @inbounds begin
         ind_max = argmax(Y[idxs])
+        maxidx = first(idxs) + ind_max - 1
         if 1 < ind_max < length(idxs)
-            wf_max = extrema3points(view(Y[idxs], ind_max-1:ind_max+1)...)
+            y1, y2, y3 = Y[maxidx-1], Y[maxidx], Y[maxidx+1]
+            wvf_max = extrema3points(y1, y2, y3)
+            t_max = X[maxidx] + step(X) * (y1 - y3) / (2 * (y1 - 2y2 + y3))
         else
-            wf_max = Y[idxs][ind_max]
+            wvf_max = Y[maxidx]
+            t_max = X[maxidx]
         end
     end
 
-    return wf_max
+    (max = wvf_max, t = t_max)
 end
