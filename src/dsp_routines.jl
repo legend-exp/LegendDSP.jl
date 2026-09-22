@@ -44,11 +44,11 @@ export get_threshold
 
 
 """
-    get_qdrift(wvfs::ArrayOfRDWaveforms, t_start::AbstractArray{Unitful.Time{T}}, Δt::UnitRange{Unitful.Time{T}}; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
+    get_qdrift(wvfs::ArrayOfRDWaveforms, t_start::Array{Unitful.Time{T}}, Δt::UnitRange{Unitful.Time{T}}; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
 
 Get the Q-drift parameter for each waveform in `wvfs` by integrating the waveform with gain = 1 and using a polynomial signal estimator of order `pol_power` and length `sign_est_length` to estimate the signal.
 """
-function get_qdrift(wvfs::ArrayOfRDWaveforms, t_start::AbstractArray{<:Unitful.Time{<:Real}}, Δt::StepRangeLen{<:Unitful.Time{<:Real}}; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
+function get_qdrift(wvfs::ArrayOfRDWaveforms, t_start::Array{<:Unitful.Time{<:Real}}, Δt::StepRangeLen{<:Unitful.Time{<:Real}}; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
     # Integrate waveforms with gain = 1
     wvfs_flt_int = IntegratorFilter(1).(wvfs)
     

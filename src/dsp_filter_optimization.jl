@@ -429,7 +429,7 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     for (w, wl) in enumerate(a_grid_wl_sg)
         # extract current with optimal SG filter length with second order polynominal and first derivative
         wvfs_sgflt_deriv = SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs)
-        current_max = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(current_window), rightendpoint(current_window))
+        current_max = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(current_window), rightendpoint(current_window)).max
 
         aoe_grid[w, :]     = ustrip.(current_max) ./ e_rtft
     end
@@ -500,7 +500,7 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
     aoe_grid   = ones(Float64, length(a_grid_wl_sg), length(wvfs_wdw))
     for (w, wl) in enumerate(a_grid_wl_sg)
         # extract current with optimal SG filter length with second order polynominal and first derivative
-        a_sg = get_wvf_maximum.(SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window))
+        a_sg = get_wvf_maximum.(SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window)).max
         aoe_grid[w, :]     = ustrip.(a_sg) ./ e_rtft
     end
     return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft, 
@@ -566,7 +566,7 @@ function dsp_mwa_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Q
     wvfs_deriv = DerivativeFilter(1).(wvfs)
     aoe_grid   = ones(Float64, length(a_grid_wl_mwa), length(wvfs))
     for (w, wl) in enumerate(a_grid_wl_mwa)
-        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
+        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
         aoe_grid[w, :] = ustrip.(a_mwa) ./ e_rtft
     end
     return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft,
@@ -634,7 +634,7 @@ function dsp_mwa_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre:
     wvfs_deriv = DerivativeFilter(1).(wvfs_wdw)
     aoe_grid   = ones(Float64, length(a_grid_wl_mwa), length(wvfs_wdw))
     for (w, wl) in enumerate(a_grid_wl_mwa)
-        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window))
+        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
         aoe_grid[w, :] = ustrip.(a_mwa) ./ e_rtft
     end
     return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft,

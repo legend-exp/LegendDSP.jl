@@ -6,7 +6,6 @@ using Unitful
 using TypedTables
 using PropDicts
 using IntervalSets
-using StructArrays
 
 function make_fake_waveform(n=8192, presum_rate=1)
     t = (0:n-1) .* 16.0u"ns"
@@ -34,8 +33,8 @@ end
 
 function make_fake_data(N=3)
     Table(
-        waveform_presummed = StructArray([make_fake_waveform() for _ in 1:N]),
-        waveform_windowed  = StructArray([make_fake_waveform() for _ in 1:N]),
+        waveform_presummed = ArrayOfRDWaveforms([make_fake_waveform() for _ in 1:N]),
+        waveform_windowed  = ArrayOfRDWaveforms([make_fake_waveform() for _ in 1:N]),
         presum_rate        = fill(UInt16(1), N),
         baseline           = fill(0.0f0, N),
         timestamp          = fill(UInt64(0), N),
@@ -44,6 +43,17 @@ function make_fake_data(N=3)
         t_sat_lo           = fill(UInt16(0), N),
         t_sat_hi           = fill(UInt16(0), N),
         deadtime           = fill(UInt16(0), N),
+    )
+end
+
+function make_fake_uncompressed_data(N=3)
+    data = make_fake_data(N)
+    Table(
+        waveform = data.waveform_windowed,
+        baseline = data.baseline,
+        timestamp = data.timestamp,
+        eventnumber = data.eventnumber,
+        daqenergy = data.daqenergy,
     )
 end
 
@@ -198,6 +208,7 @@ end
         @test all(result.t0  .< result.t50)
         @test all(result.t50 .< result.t90)
         @test all(ustrip.(result.drift_time) .>= 0)
+        @test result.t_amax isa AbstractVector
         @test all(first(data.waveform_windowed[1].time) .<= result.t_amax .<= last(data.waveform_windowed[1].time))
     end
 
@@ -206,6 +217,18 @@ end
             @test all(isfinite, ustrip.(getproperty(result, col)))
         end
     end
+end
+
+@testset "dsp_icpc" begin
+    data = make_fake_uncompressed_data(3)
+    config = make_fake_config()
+    result = dsp_icpc(data, config, 500u"µs", PropDict())
+
+    @test result isa TypedTables.Table
+    @test length(result) == 3
+    @test all(col -> col in columnnames(result), [:t_amax, :lq_80, :lq_90, :lq_amax])
+    @test result.t_amax isa AbstractVector
+    @test all(first(data.waveform[1].time) .<= result.t_amax .<= last(data.waveform[1].time))
 end
 
 
