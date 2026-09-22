@@ -378,14 +378,15 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     # extract decay times
     tail_stats = tailstats.(wvfs_pre, leftendpoint(tail_window), rightendpoint(tail_window))
 
-    auxpz1_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz1_window), rightendpoint(config.auxpz1_window))
-    auxpz2_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz2_window), rightendpoint(config.auxpz2_window))
-
     # deconvolute waveform 
     # --> wvfs = wvfs_pz
     deconv_flt = InvCRFilter(τ)
     wvfs_pre = deconv_flt.(wvfs_pre)
     wvfs_wdw = deconv_flt.(wvfs_wdw)
+
+    # auxiliary pz-corrected waveform window determination
+    auxpz1_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz1_window), rightendpoint(config.auxpz1_window))
+    auxpz2_stats = signalstats.(wvfs_pre, leftendpoint(config.auxpz2_window), rightendpoint(config.auxpz2_window))
 
     # get tail mean, std and slope
     pz_stats = signalstats.(wvfs_pre, leftendpoint(tail_window), rightendpoint(tail_window))
