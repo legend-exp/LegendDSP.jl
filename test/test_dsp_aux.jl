@@ -19,7 +19,7 @@ function make_aux_data()
     Table(
         waveform = StructArray(waveforms),
         waveform_presummed = StructArray(waveforms),
-        presum_rate = UInt8[8, 8, 8],
+        presum_rate = UInt8[8, 4, 2],
         baseline = Float32[100, 40, -8],
         timestamp = UInt64[11, 12, 13],
         eventnumber = UInt32[21, 22, 23],
@@ -31,10 +31,10 @@ end
     data = make_aux_data()
     config = make_fake_config()
 
-    # Raw maxima are [125, 72, -5].
-    # After subtracting baseline, the result is
-    # [125 - 8*100, 72 - 8*40, -5 - 8*(-8)].
-    expected_e_max = Float32[-675, -248, 59]
+    # Decoded maxima are [125, 72, -5]. Uncompressed data subtracts the
+    # baseline directly, while compressed data first scales it by presum_rate.
+    expected_uncompressed_e_max = Float32[25, 32, 3]
+    expected_compressed_e_max = Float32[-675, -88, 11]
     expected_t_max = [32, 16, 16]u"ns"
 
     @testset "uncompressed waveforms" begin
@@ -45,7 +45,7 @@ end
         @test columnnames(result) == (
             :e_max, :t_max, :blfc, :timestamp, :eventID_fadc, :e_fc,
         )
-        @test result.e_max == expected_e_max
+        @test result.e_max == expected_uncompressed_e_max
         @test result.t_max == expected_t_max
         @test result.blfc == data.baseline
         @test result.timestamp == data.timestamp
@@ -61,7 +61,7 @@ end
         @test columnnames(result) == (
             :e_max, :t_max, :blfc, :timestamp, :eventID_fadc, :e_fc,
         )
-        @test result.e_max == expected_e_max
+        @test result.e_max == expected_compressed_e_max
         @test result.t_max == expected_t_max
         @test result.blfc == data.baseline
         @test result.timestamp == data.timestamp
@@ -70,8 +70,8 @@ end
     end
 
     @testset "maxima include baseline subtraction" begin
-        @test dsp_aux(data, config).e_max == expected_e_max
-        @test dsp_aux_compressed(data, config).e_max == expected_e_max
+        @test dsp_aux(data, config).e_max == expected_uncompressed_e_max
+        @test dsp_aux_compressed(data, config).e_max == expected_compressed_e_max
     end
 end
 
