@@ -42,4 +42,12 @@ using Unitful
     max_mid = get_wvf_maximum(wvf_mid, times[48], times[54])
     @test max_mid >= 1.0   # interpolated maximum should be at least 1.0
     @test max_mid < 1.2    # but not unreasonably high
+
+    # Quadratic interpolation of a maximum between two samples
+    signal_time = @. -(ustrip(u"ns", times) - 805)^2
+    wvf_time = RDWaveform(times, signal_time)
+    @test get_wvf_maximum_time(wvf_time, times[48], times[54]) ≈ 805u"ns"
+
+    # At a search-window boundary, return the discrete sample time
+    @test get_wvf_maximum_time(wvf_start, 0u"ns", 64u"ns") == 0u"ns"
 end
