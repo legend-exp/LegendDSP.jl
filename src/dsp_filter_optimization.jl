@@ -92,6 +92,64 @@ export dsp_qdrift_flt_optimization
 
 
 """
+    dsp_flt_optimization_prepare(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real})
+
+Baseline-subtract and pole-zero correct `wvfs` once for repeated filter evaluations.
+
+# Returns
+A `NamedTuple` with
+- `wvfs_pz`: baseline-subtracted waveforms deconvolved with `InvCRFilter(τ)`
+- `t50`: time of 50% of the maximum of each `wvfs_pz`
+- `bl_stats`: baseline statistics over `config.bl_window`
+- `signal_estimator`: `SignalEstimator` used to read the filter output at the pickoff time
+- `sampling_period`: time step of the waveforms
+"""
+function dsp_flt_optimization_prepare(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real})
+    bl_stats = signalstats.(wvfs, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
+    wvfs_pz = InvCRFilter(τ).(shift_waveform.(wvfs, -bl_stats.mean))
+    t50 = get_threshold(wvfs_pz, maximum.(wvfs_pz.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
+    return (; wvfs_pz, t50, bl_stats, signal_estimator, sampling_period=step(first(wvfs).time))
+end
+export dsp_flt_optimization_prepare
+
+
+"""
+    dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt, ft, flt)
+
+Energy of the prepared waveforms `prep` (see [`dsp_flt_optimization_prepare`](@ref))
+at rise time `rt` and flat-top time `ft`. `flt` is `Val(:trap)`, `Val(:cusp)`, `Val(:zac)`
+or the corresponding `Symbol`.
+
+The trapezoidal energy is read at `t50 + rt + ft/2`, the CUSP and ZAC energies at
+`t50 + flt_length/2`. CUSP and ZAC use `τ = 10000000 µs`, which disables their CR filter,
+and the filter length of `config`.
+"""
+function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:trap})
+    uflt_rtft = TrapezoidalChargeFilter(rt, ft)
+    return prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), prep.t50 .+ (rt + ft/2))
+end
+
+function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:cusp})
+    flt_length = config.flt_length_cusp
+    scale = ustrip(NoUnits, flt_length / prep.sampling_period)
+    uflt_rtft = CUSPChargeFilter(rt, ft, 10000000.0u"µs", flt_length, scale)
+    return prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), prep.t50 .+ flt_length/2)
+end
+
+function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:zac})
+    flt_length = config.flt_length_zac
+    scale = ustrip(NoUnits, flt_length / prep.sampling_period)
+    uflt_rtft = ZACChargeFilter(rt, ft, 10000000.0u"µs", flt_length, scale)
+    return prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), prep.t50 .+ flt_length/2)
+end
+
+dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, flt::Symbol) =
+    dsp_energy_rtft(prep, config, rt, ft, Val(flt))
+export dsp_energy_rtft
+
+
+"""
     dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
 
 Get ENC noise grid values for given trap grid rise times.
