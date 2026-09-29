@@ -148,6 +148,28 @@ dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, f
     dsp_energy_rtft(prep, config, rt, ft, Val(flt))
 export dsp_energy_rtft
 
+"""
+    dsp_pulse_shape_flt_optimization(prep::NamedTuple, config::DSPConfig, sg_wl::Unitful.Time{<:Real})
+
+Pulse-shape quantities of the prepared waveforms `prep` (see
+[`dsp_flt_optimization_prepare`](@ref)).
+
+# Returns
+A `NamedTuple` with
+- `t10`, `t90`: times of 10% and 90% of the waveform maximum
+- `a`: maximum of the Savitzky-Golay current (window length `sg_wl`, polynomial degree
+  `config.sg_flt_degree`) within `config.current_window`
+"""
+function dsp_pulse_shape_flt_optimization(prep::NamedTuple, config::DSPConfig, sg_wl::Unitful.Time{<:Real})
+    wvf_max = maximum.(prep.wvfs_pz.signal)
+    t10 = get_threshold(prep.wvfs_pz, wvf_max .* 0.1; mintot=config.kwargs_pars.tx_mintot)
+    t90 = get_threshold(prep.wvfs_pz, wvf_max .* 0.9; mintot=config.kwargs_pars.tx_mintot)
+    wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, config.sg_flt_degree, 1).(prep.wvfs_pz)
+    a = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(config.current_window), rightendpoint(config.current_window)).max
+    return (; t10, t90, a)
+end
+export dsp_pulse_shape_flt_optimization
+
 
 """
     dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real

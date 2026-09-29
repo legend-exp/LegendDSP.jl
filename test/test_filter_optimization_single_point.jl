@@ -162,4 +162,19 @@ end
             @test isequal(e_new, e_ref)
         end
     end
+
+    @testset "pulse shape" begin
+        shape = dsp_pulse_shape_flt_optimization(prep, config, 100.0u"ns")
+        @test keys(shape) == (:t10, :t90, :a)
+        @test length(shape.t10) == length(shape.t90) == length(shape.a) == length(wvfs)
+        @test all(shape.t90 .> shape.t10)
+        @test all(isfinite, ustrip.(shape.a))
+        # 10% and 90% crossings of the 2 µs linear rise lie 0.2 and 1.8 µs after the onset
+        @test all(abs.(ustrip.(u"µs", shape.t10) .- (onsets .+ 0.2)) .< 0.2)
+        @test all(abs.(ustrip.(u"µs", shape.t90) .- (onsets .+ 1.8)) .< 0.2)
+        # the SG current maximum equals the direct computation on wvfs_pz
+        a_ref = get_wvf_maximum.(SavitzkyGolayFilter(100.0u"ns", config.sg_flt_degree, 1).(prep.wvfs_pz),
+                                 leftendpoint(config.current_window), rightendpoint(config.current_window)).max
+        @test isequal(shape.a, a_ref)
+    end
 end
