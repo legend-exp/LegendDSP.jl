@@ -128,4 +128,38 @@ end
     @testset "unknown filter" begin
         @test_throws MethodError dsp_energy_rtft(prep, config, rt, 2.0u"µs", :unknown)
     end
+
+    @testset "grid functions equal the per-ft reference" begin
+        # Inline copy of the per-ft loop of the original grid functions, built
+        # from the public filters only.
+        function reference_grid(wvfs, config, τ, rt, ft_grid, make_flt, pickoff)
+            bl_stats = signalstats.(wvfs, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
+            wvfs_pz = InvCRFilter(τ).(shift_waveform.(wvfs, -bl_stats.mean))
+            signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
+            t50 = get_threshold(wvfs_pz, maximum.(wvfs_pz.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+            e_grid = Array{Union{Missing, Float32}}(missing, length(ft_grid), length(wvfs_pz))
+            for (f, ft) in pairs(ft_grid)
+                e_grid[f, :] = signal_estimator.(make_flt(rt, ft).(wvfs_pz), pickoff(t50, rt, ft))
+            end
+            return e_grid
+        end
+
+        scale(flt_length) = ustrip(NoUnits, flt_length / step(first(wvfs).time))
+        refs = (
+            trap = ((rt, ft) -> TrapezoidalChargeFilter(rt, ft),
+                    (t50, rt, ft) -> t50 .+ (rt + ft/2)),
+            cusp = ((rt, ft) -> CUSPChargeFilter(rt, ft, 10000000.0u"µs", config.flt_length_cusp, scale(config.flt_length_cusp)),
+                    (t50, rt, ft) -> t50 .+ config.flt_length_cusp/2),
+            zac  = ((rt, ft) -> ZACChargeFilter(rt, ft, 10000000.0u"µs", config.flt_length_zac, scale(config.flt_length_zac)),
+                    (t50, rt, ft) -> t50 .+ config.flt_length_zac/2),
+        )
+        for flt in (:trap, :cusp, :zac)
+            f_grid, ft_grid = grids[flt]
+            e_new = f_grid(wvfs, config, τ, rt)
+            e_ref = reference_grid(wvfs, config, τ, rt, ft_grid, refs[flt]...)
+            @test typeof(e_new) == typeof(e_ref)
+            @test size(e_new) == (length(ft_grid), length(wvfs))
+            @test isequal(e_new, e_ref)
+        end
+    end
 end
