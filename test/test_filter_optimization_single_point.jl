@@ -125,6 +125,13 @@ end
         end
     end
 
+    @testset "times in any unit and number type" begin
+        for flt in (:trap, :cusp, :zac)
+            @test isequal(dsp_energy_rtft(prep, config, uconvert(u"ns", rt), 2000u"ns", flt),
+                          dsp_energy_rtft(prep, config, rt, 2.0u"µs", flt))
+        end
+    end
+
     @testset "unknown filter" begin
         @test_throws MethodError dsp_energy_rtft(prep, config, rt, 2.0u"µs", :unknown)
     end

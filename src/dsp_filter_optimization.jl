@@ -127,26 +127,31 @@ and the filter length of `config`.
 
 Each call allocates transient memory of about five times the size of `prep.wvfs_pz` for
 CUSP and ZAC and about twice for the trapezoidal filter; callers running it concurrently
-must bound the number of simultaneous calls accordingly. An energy is `NaN` for an event
+must bound the number of simultaneous calls accordingly. `rt` and `ft` may be given in any
+time unit and number type; they are converted to the type of the sampling period (trapezoidal)
+or of the filter length (CUSP, ZAC) before the filter is built. An energy is `NaN` for an event
 whose pickoff time lies outside the filtered time axis. The function only reads `prep` and
 is safe to call concurrently on the same `prep`.
 """
 function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:trap})
-    uflt_rtft = TrapezoidalChargeFilter(rt, ft)
+    T = typeof(float(prep.sampling_period))
+    uflt_rtft = TrapezoidalChargeFilter(convert(T, rt), convert(T, ft))
     return prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), prep.t50 .+ (rt + ft/2))
 end
 
 function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:cusp})
     flt_length = config.flt_length_cusp
     scale = ustrip(NoUnits, flt_length / prep.sampling_period)
-    uflt_rtft = CUSPChargeFilter(rt, ft, 10000000.0u"µs", flt_length, scale)
+    T = typeof(flt_length)
+    uflt_rtft = CUSPChargeFilter(convert(T, rt), convert(T, ft), convert(T, 10000000.0u"µs"), flt_length, scale)
     return prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), prep.t50 .+ flt_length/2)
 end
 
 function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:zac})
     flt_length = config.flt_length_zac
     scale = ustrip(NoUnits, flt_length / prep.sampling_period)
-    uflt_rtft = ZACChargeFilter(rt, ft, 10000000.0u"µs", flt_length, scale)
+    T = typeof(flt_length)
+    uflt_rtft = ZACChargeFilter(convert(T, rt), convert(T, ft), convert(T, 10000000.0u"µs"), flt_length, scale)
     return prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), prep.t50 .+ flt_length/2)
 end
 
