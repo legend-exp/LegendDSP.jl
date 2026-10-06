@@ -129,9 +129,19 @@ end
         @test_throws MethodError dsp_energy_rtft(prep, config, rt, 2.0u"µs", :unknown)
     end
 
+    @testset "threaded evaluation equals serial evaluation" begin
+        points = [(rt, ft, flt) for flt in (:trap, :cusp, :zac), rt in (2.0u"µs", 4.0u"µs"), ft in (1.0u"µs", 2.5u"µs")]
+        serial = [dsp_energy_rtft(prep, config, p...) for p in points]
+        threaded = similar(serial)
+        Threads.@threads for i in eachindex(points)
+            threaded[i] = dsp_energy_rtft(prep, config, points[i]...)
+        end
+        @test all(isequal.(serial, threaded))
+    end
+
     @testset "grid functions equal the per-ft reference" begin
-        # Inline copy of the per-ft loop of the original grid functions, built
-        # from the public filters only.
+        # The reference is computed from the public filters only, independently
+        # of the functions under test.
         function reference_grid(wvfs, config, τ, rt, ft_grid, make_flt, pickoff)
             bl_stats = signalstats.(wvfs, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
             wvfs_pz = InvCRFilter(τ).(shift_waveform.(wvfs, -bl_stats.mean))

@@ -124,6 +124,12 @@ or the corresponding `Symbol`.
 The trapezoidal energy is read at `t50 + rt + ft/2`, the CUSP and ZAC energies at
 `t50 + flt_length/2`. CUSP and ZAC use `τ = 10000000 µs`, which disables their CR filter,
 and the filter length of `config`.
+
+Each call allocates transient memory of about five times the size of `prep.wvfs_pz` for
+CUSP and ZAC and about twice for the trapezoidal filter; callers running it concurrently
+must bound the number of simultaneous calls accordingly. An energy is `NaN` for an event
+whose pickoff time lies outside the filtered time axis. The function only reads `prep` and
+is safe to call concurrently on the same `prep`.
 """
 function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:trap})
     uflt_rtft = TrapezoidalChargeFilter(rt, ft)
@@ -156,7 +162,8 @@ Pulse-shape quantities of the prepared waveforms `prep` (see
 
 # Returns
 A `NamedTuple` with
-- `t10`, `t90`: times of 10% and 90% of the waveform maximum
+- `t10`, `t90`: times of 10% and 90% of the maximum of the deconvolved waveforms in
+  `prep.wvfs_pz`
 - `a`: maximum of the Savitzky-Golay current (window length `sg_wl`, polynomial degree
   `config.sg_flt_degree`) within `config.current_window`
 """
