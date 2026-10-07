@@ -29,6 +29,9 @@ end
 export dsp_qc_flt_optimization_compressed
 
 function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, get_qc::Union{Function, Nothing})
+    # get waveform data
+    wvfs = decode_data(wvfs)
+
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
 
@@ -74,6 +77,9 @@ function dsp_qdrift_flt_optimization(wvfs::ArrayOfRDWaveforms, blmean::Vector{<:
     t0_threshold      = config.t0_threshold
     qdrift_int_length = config.qdrift_int_length
 
+    # get waveform data
+    wvfs = decode_data(wvfs)
+
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -blmean)
 
@@ -104,6 +110,9 @@ function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     bl_window                   = config.bl_window
     e_grid_rt_trap              = config.e_grid_rt_trap
     enc_pickoff_trap            = config.enc_pickoff_trap
+
+    # get waveform data
+    wvfs = decode_data(wvfs)
 
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
@@ -153,6 +162,9 @@ function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
 
+    # get waveform data
+    wvfs = decode_data(wvfs)
+
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
@@ -201,6 +213,9 @@ function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
     # set τ for ZAC filter to very high number to switch of CR filter
     τ_zac = 10000000.0u"µs"
 
+    # get waveform data
+    wvfs = decode_data(wvfs)
+
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
@@ -242,6 +257,9 @@ function dsp_trap_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     # get config parameters
     bl_window                   = config.bl_window
     e_grid_ft_trap              = config.e_grid_ft_trap
+
+    # get waveform data
+    wvfs = decode_data(wvfs)
 
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
@@ -293,6 +311,9 @@ function dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, �
     # set τ for CUSP filter to very high number to switch of CR filter
     τ_cusp = 10000000.0u"µs"
 
+    # get waveform data
+    wvfs = decode_data(wvfs)
+
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
@@ -342,6 +363,9 @@ function dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ
 
     # set τ for ZAC filter to very high number to switch of CR filter
     τ_zac = 10000000.0u"µs"
+
+    # get waveform data
+    wvfs = decode_data(wvfs)
 
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
@@ -400,6 +424,9 @@ function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Qu
     # get optimal filter parameters
     rt = pars_filter.trap.rt
     ft = pars_filter.trap.ft
+
+    # get waveform data
+    wvfs = decode_data(wvfs)
 
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
@@ -467,6 +494,10 @@ function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::
     # get optimal filter parameters
     rt = pars_filter.trap.rt
     ft = pars_filter.trap.ft
+
+    # get waveform data
+    wvfs_wdw = decode_data(wvfs_wdw)
+    wvfs_pre = decode_data(wvfs_pre)
 
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs_pre, leftendpoint(bl_window), rightendpoint(bl_window))
@@ -538,6 +569,9 @@ function dsp_mwa_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Q
     rt = pars_filter.trap.rt
     ft = pars_filter.trap.ft
 
+    # get waveform data
+    wvfs = decode_data(wvfs)
+
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
@@ -600,6 +634,10 @@ function dsp_mwa_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre:
     # get optimal filter parameters
     rt = pars_filter.trap.rt
     ft = pars_filter.trap.ft
+
+    # get waveform data
+    wvfs_wdw = decode_data(wvfs_wdw)
+    wvfs_pre = decode_data(wvfs_pre)
 
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs_pre, leftendpoint(bl_window), rightendpoint(bl_window))

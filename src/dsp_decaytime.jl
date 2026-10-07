@@ -9,6 +9,9 @@ Get statistics on the logarhithmic of the tail of the `wvfs` in the interval `ta
 - `τ`: decay time in µs
 """
 function dsp_decay_times(wvfs::ArrayOfRDWaveforms, bl_window::ClosedInterval{<:Unitful.Time{<:T}}, tail_window::ClosedInterval{<:Unitful.Time{<:T}}) where T <: Real
+    # get waveform data
+    wvfs = decode_data(wvfs)
+
     # get baseline mean, std and slope
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 

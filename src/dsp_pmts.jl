@@ -14,8 +14,9 @@ function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     saturation_limit_high = config.saturation_limit_high
     saturation_limit_low  = config.saturation_limit_low
 
-    # get waveform data 
-    waveform = decode_data(data.waveform)
+    # get waveform data
+    data = decode_data(data)
+    waveform = data.waveform
     ts  = data.timestamp
     ch  = data.channel
     evID = data.eventnumber
