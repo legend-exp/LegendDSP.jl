@@ -77,7 +77,8 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     # unpack optimization parameters
     sg_window_length = pars_optimization.sg.wl
 
-    # get waveform data 
+    # get waveform data
+    data = decode_data(data)
     wvfs = data.waveform
     blfc = data.baseline
     ts   = data.timestamp
@@ -237,8 +238,9 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     # unpack optimization parameters
     sg_window_length = pars_optimization.sg.wl
 
-    # get waveform data 
-    wvfs = decode_data(data.waveform_bit_drop)
+    # get waveform data
+    data = decode_data(data)
+    wvfs = data.waveform_bit_drop
     blfc = data.baseline
     ts   = data.timestamp
     evID = data.eventnumber

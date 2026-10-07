@@ -83,7 +83,8 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     sg_wl   = get_fltpars(pars_filter, :sg, config)
     mwa_wl  = get_fltpars(pars_filter, :mwa, config)
 
-    # get waveform data 
+    # get waveform data
+    data = decode_data(data)
     wvfs = data.waveform
     blfc = data.baseline
     ts   = data.timestamp
@@ -335,9 +336,10 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     sg_wl   = get_fltpars(pars_filter, :sg, config)
     mwa_wl  = get_fltpars(pars_filter, :mwa, config)
 
-    # get waveform data 
-    wvfs_pre = decode_data(data.waveform_presummed)
-    wvfs_wdw = decode_data(data.waveform_windowed)
+    # get waveform data
+    data = decode_data(data)
+    wvfs_pre = data.waveform_presummed
+    wvfs_wdw = data.waveform_windowed
     presum_rate = data.presum_rate
     blfc = data.baseline
     ts   = data.timestamp

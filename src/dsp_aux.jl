@@ -30,7 +30,8 @@ function dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
     # get config parameters
     bl_window = config.bl_window
 
-    # get waveform data 
+    # get waveform data
+    data = decode_data(data)
     wvfs = data.waveform
     blfc = data.baseline
     ts   = data.timestamp
@@ -99,8 +100,9 @@ function dsp_puls_compressed(data::Q, config::DSPConfig) where {Q <: Table}
     # get config parameters
     bl_window = config.bl_window
 
-    # get waveform data 
-    wvfs = decode_data(data.waveform_presummed)
+    # get waveform data
+    data = decode_data(data)
+    wvfs = data.waveform_presummed
     blfc = data.baseline
     ts   = data.timestamp
     evID = data.eventnumber
@@ -146,6 +148,7 @@ The `config` argument is accepted for consistency with the other detector DSP
 entry points but is not used.
 """
 function dsp_aux(data::Q, ::DSPConfig) where {Q <: Table}
+    data = decode_data(data)
     extrema = extremestats.(data.waveform)
 
     e_max = extrema.max .- data.baseline
@@ -170,7 +173,8 @@ decoded before their maxima and maximum times are determined. Each baseline is
 scaled by the corresponding presumming rate before it is subtracted.
 """
 function dsp_aux_compressed(data::Q, ::DSPConfig) where {Q <: Table}
-    wvfs = decode_data(data.waveform_presummed)
+    data = decode_data(data)
+    wvfs = data.waveform_presummed
     extrema = extremestats.(wvfs)
 
     e_max = extrema.max .- data.baseline .* data.presum_rate
