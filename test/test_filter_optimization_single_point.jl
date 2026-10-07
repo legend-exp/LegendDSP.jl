@@ -129,6 +129,9 @@ end
         for flt in (:trap, :cusp, :zac)
             @test isequal(dsp_energy_rtft(prep, config, uconvert(u"ns", rt), 2000u"ns", flt),
                           dsp_energy_rtft(prep, config, rt, 2.0u"µs", flt))
+            # mixed units: rise time in ns, flat-top time in µs
+            @test isequal(dsp_energy_rtft(prep, config, uconvert(u"ns", rt), 2.0u"µs", flt),
+                          dsp_energy_rtft(prep, config, rt, 2.0u"µs", flt))
         end
     end
 
