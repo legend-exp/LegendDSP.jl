@@ -162,13 +162,15 @@ export dsp_energy_rtft
 """
     dsp_pulse_shape_flt_optimization(prep::NamedTuple, config::DSPConfig, sg_wl::Unitful.Time{<:Real})
 
-Pulse-shape quantities of the prepared waveforms `prep` (see
-[`dsp_flt_optimization_prepare`](@ref)).
+Pulse-shape quantities of the baseline-subtracted, deconvolved waveforms `prep.wvfs_pz`; only
+this field of `prep` is read. Pass waveforms whose sampling resolves the SG window `sg_wl`, as
+the windowed waveforms of the dsp tier do (for example `(wvfs_pz = wvfs_wdw_pz,)`); the
+presummed waveforms prepared by [`dsp_flt_optimization_prepare`](@ref) can be sampled more
+coarsely than `sg_wl`, in which case `a` is zero.
 
 # Returns
 A `NamedTuple` with
-- `t10`, `t90`: times of 10% and 90% of the maximum of the deconvolved waveforms in
-  `prep.wvfs_pz`
+- `t10`, `t90`: times of 10% and 90% of the maximum of the waveforms in `prep.wvfs_pz`
 - `a`: maximum of the Savitzky-Golay current (window length `sg_wl`, polynomial degree
   `config.sg_flt_degree`) within `config.current_window`
 """
