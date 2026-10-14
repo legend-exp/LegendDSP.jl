@@ -682,3 +682,147 @@ function dsp_mwa_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre:
                 )
 end
 export dsp_mwa_optimization_compressed
+
+"""
+    dplms_default_grid(n_rise::Integer; nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, ff_factors = 1:4)
+
+DPLMS grid of flat-top widenings `ff = k·n_rise` samples for `k` in `ff_factors`, all at the
+weights `nm`, `za`, `ft`, `ct` in units of the reference amplitude. Only weight ratios matter,
+and in these units any `za` above about 1 already enforces zero area; `za = 0` switches the
+zero-area condition off.
+"""
+dplms_default_grid(n_rise::Integer; nm::Real = 1.0, za::Real = 1e3, ft::Real = 1.0, ct::Real = 0.0, ff_factors = 1:4) =
+    [(nm = float(nm), za = float(za), ft = float(ft), ct = float(ct), ff = round(Int, k * n_rise)) for k in ff_factors]
+export dplms_default_grid
+
+"""
+    dsp_dplms_energy(wvfs::ArrayOfRDWaveforms, coeffs::AbstractVector, t_amax::AbstractVector, t_pickoff, current_window::ClosedInterval, signal_estimator::SignalEstimator)
+
+Apply the DPLMS filter `coeffs` to baseline-subtracted, pole-zero-corrected waveforms and read
+the energy at `t_amax + t_pickoff` with `signal_estimator`. Returns `(e, emax)` with `emax` the
+maximum of the filter output inside `current_window`.
+"""
+function dsp_dplms_energy(wvfs::ArrayOfRDWaveforms, coeffs::AbstractVector, t_amax::AbstractVector, t_pickoff, current_window::ClosedInterval, signal_estimator::SignalEstimator)
+    axes(wvfs) == axes(t_amax) || throw(DimensionMismatch("waveforms $(axes(wvfs)) and A-max times $(axes(t_amax)) differ"))
+    wvfs = decode_data(wvfs)
+    wvfs_flt = ConvolutionFilter(DirectConvolution(), coeffs).(wvfs)
+    emax = get_wvf_maximum.(wvfs_flt, leftendpoint(current_window), rightendpoint(current_window))
+    (e = signal_estimator.(wvfs_flt, t_amax .+ t_pickoff), emax = [a.max for a in emax])
+end
+export dsp_dplms_energy
+
+"""
+    dsp_dplms_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity, drift::AbstractVector;
+        n_pre = nothing, n_post = nothing, n_noise_windows = 8, ff_level = 0.999, n_bins = 5, plateau_length = 20, sg_wl = 896u"ns", grid = dplms_default_grid)
+
+Synthesize DPLMS energy filters on presummed waveforms for every point of `grid` and return the
+energies they give. A grid point is a `NamedTuple` with the weights `nm`, `za`, `ft`, `ct` and
+the flat-top widening `ff` in samples.
+
+Steps: baseline subtraction over `config.bl_window`; pole-zero correction with `InvCRFilter(τ)`;
+time of maximum current from the Savitzky-Golay derivative (`sg_wl`, `config.sg_flt_degree`)
+inside `config.current_window`; alignment of every waveform to the sample nearest the median
+A-max; windows of `n_pre` samples before to `n_post` after that sample; noise matrix from the
+baseline window; reference and one reference per drift-time bin, the bins being `n_bins`
+quantiles of `drift`; flat-top matrix from the drift-bin references widened by `ff` samples.
+All matrices are in units of the reference amplitude, the mean over the last `plateau_length`
+window samples.
+
+Unless given, `n_pre` and `n_post` equal `(n_bl - n_noise_windows) ÷ 2` with `n_bl` the number of
+samples inside `config.bl_window`: the longest symmetric window that leaves `n_noise_windows`
+sliding windows per event for the noise matrix. A window as long as the baseline leaves the
+constant mode of the noise matrix undetermined, because the baseline mean is subtracted over the
+same region, so only zero-area filters (`za > 0`) are meaningful for long windows.
+
+Every grid point yields a filter applied to the unaligned pole-zero-corrected waveforms with
+the energy read at `t_amax + t_pickoff`, `t_pickoff = n_post·Δt`. The flat-top term
+penalizes the output slope of every drift-bin reference shifted by up to `ff` samples, so the
+output stays flat while any of these shapes moves by `ff` samples. `n_rise` is the number of
+samples after the alignment point until the slowest drift-bin reference reaches `ff_level` of
+the plateau. `grid` is either a vector of grid points or a function of `n_rise` returning one,
+e.g. `grid = n -> dplms_default_grid(n; za = 0)` for filters without the zero-area condition.
+
+# Returns
+- `e_grid`, `emax_grid`: energies and filter-output maxima, size `(length(grid), length(wvfs))`
+- `coeffs`: impulse response per grid point; `t_pickoff`
+- `noise_out`, `zero_area`: predicted relative output noise and coefficient sum per grid point
+- `grid`, `ref`, `ref_bins` (one column per bin), `t_amax`, `plateau`, `n_pre`, `n_post`, `n_rise`
+- `superpulse`: the aligned superpulse in units of the reference amplitude
+- `response`: `superpulse` filtered with `coeffs`, one `RDWaveform` per grid point
+- `noise`, `flattops`: the noise matrix and the flat-top matrix per `ff` (a `Dict`), in units of
+  the reference amplitude
+"""
+function dsp_dplms_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{<:Real}, drift::AbstractVector;
+        n_pre::Union{Integer,Nothing} = nothing, n_post::Union{Integer,Nothing} = nothing, n_noise_windows::Integer = 8,
+        ff_level::Real = 0.999, n_bins::Integer = 5, plateau_length::Integer = 20,
+        sg_wl::Quantity{<:Real} = 896u"ns", grid = dplms_default_grid)
+    axes(wvfs) == axes(drift) || throw(DimensionMismatch("waveforms $(axes(wvfs)) and drift proxies $(axes(drift)) differ"))
+    all(isfinite, drift) || throw(ArgumentError("drift proxies must be finite, got $(count(!isfinite, drift)) non-finite values"))
+    wvfs = decode_data(wvfs)
+    t_rec = _shared_time_axis(wvfs)
+    n_bl = _sample_index(t_rec, rightendpoint(config.bl_window)) - _sample_index(t_rec, leftendpoint(config.bl_window)) + 1
+    n_half = (n_bl - n_noise_windows) ÷ 2
+    n_pre = something(n_pre, n_half)
+    n_post = something(n_post, n_half)
+    n = n_pre + n_post + 1
+    n <= n_bl || throw(ArgumentError("window of n_pre + n_post + 1 = $n samples is longer than the baseline of $n_bl samples"))
+    1 <= plateau_length <= n_post || throw(ArgumentError("plateau_length $plateau_length must lie in 1:$n_post"))
+    bl_window      = config.bl_window
+    current_window = config.current_window
+
+    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
+    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+    wvfs = InvCRFilter(τ).(wvfs)
+    Δt = step(first(wvfs.time))
+
+    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
+
+    # time of maximum current
+    wvfs_deriv = SavitzkyGolayFilter(sg_wl, config.sg_flt_degree, 1).(wvfs)
+    amax = get_wvf_maximum.(wvfs_deriv, leftendpoint(current_window), rightendpoint(current_window))
+    t_amax = [a.t for a in amax]
+
+    # aligned windows in units of the reference amplitude
+    t = first(wvfs.time)
+    t_target = t[_sample_index(t, median(t_amax))]
+    wvfs_aligned = align_waveforms(wvfs, t_amax, t_target)
+    windows = aligned_windows(wvfs_aligned, t_target, n_pre, n_post)
+    ref, plateau = dplms_reference(windows, (n - plateau_length + 1):n)
+    noise = dplms_noise_matrix(wvfs, bl_window, n) ./ plateau^2
+    ranks = invperm(sortperm(drift))
+    bins = cld.(ranks .* n_bins, length(drift))
+    binned = dplms_binned_reference(windows, bins, plateau)
+    ref_bins = binned.refs
+
+    # samples from the alignment point until the slowest bin reaches ff_level
+    n_rise = maximum(axes(ref_bins, 2)) do b
+        i = findfirst(>=(ff_level), view(ref_bins, (n_pre + 1):n, b))
+        isnothing(i) && throw(ArgumentError("drift-time bin $b never reaches $ff_level of the plateau after the alignment point"))
+        max(i - 1, 1)
+    end
+    grid = grid isa AbstractVector ? grid : grid(n_rise)
+    ff_max = maximum(w -> w.ff, grid)
+    refs_wide = dplms_binned_reference(aligned_windows(wvfs_aligned, t_target, n_pre + ff_max, n_post + ff_max), bins, plateau).refs
+    flattops = Dict(ff => dplms_flattop_matrix(refs_wide[(1 + ff_max - ff):(end - ff_max + ff), :], ff) for ff in unique(w.ff for w in grid))
+    superpulse = RDWaveform(t, mean(wvfs_aligned.signal) ./ plateau)
+
+    t_pickoff = n_post * Δt
+    e_grid    = Matrix{Float64}(undef, length(grid), length(wvfs))
+    emax_grid = similar(e_grid)
+    coeffs    = Vector{Vector{Float64}}(undef, length(grid))
+    noise_out = Vector{Float64}(undef, length(grid))
+    zero_area = similar(noise_out)
+    for (g, w) in enumerate(grid)
+        s = dplms_synthesis(noise, ref, flattops[w.ff], binned; nm = w.nm, za = w.za, ft = w.ft, ct = w.ct)
+        energies = dsp_dplms_energy(wvfs, s.coeffs, t_amax, t_pickoff, current_window, signal_estimator)
+        e_grid[g, :]    = energies.e
+        emax_grid[g, :] = energies.emax
+        coeffs[g]    = s.coeffs
+        noise_out[g] = s.noise_out
+        zero_area[g] = s.zero_area
+    end
+    response = [ConvolutionFilter(DirectConvolution(), c)(superpulse) for c in coeffs]
+
+    (; e_grid, emax_grid, coeffs, t_pickoff, noise_out, zero_area, grid, ref, ref_bins, t_amax, plateau, n_pre, n_post, n_rise, superpulse, response, noise, flattops)
+end
+export dsp_dplms_optimization
