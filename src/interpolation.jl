@@ -41,11 +41,12 @@ function _get_wvf_maximum_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuant
         if 1 < ind_max < length(idxs)
             y1, y2, y3 = Y[maxidx-1], Y[maxidx], Y[maxidx+1]
             wvf_max = extrema3points(y1, y2, y3)
-            t_max = X[maxidx] + step(X) * (y1 - y3) / (2 * (y1 - 2y2 + y3))
+            δ = (y1 - y3) / (2 * (y1 - 2y2 + y3))
         else
             wvf_max = Y[maxidx]
-            t_max = X[maxidx]
+            δ = zero(Y[maxidx] / Y[maxidx])
         end
+        t_max = X[maxidx] + step(X) * δ
     end
 
     (max = wvf_max, t = t_max)

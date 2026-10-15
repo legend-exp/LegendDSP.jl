@@ -1,6 +1,7 @@
 using Test
 using LegendDSP
 using RadiationDetectorSignals
+using StructArrays: StructArray
 using Unitful
 
 @testset "get_wvf_maximum edge cases" begin
@@ -57,4 +58,17 @@ using Unitful
     max_times = get_wvf_maximum.(wvfs_time, times_float[48], times_float[54]).t
     @test max_times isa Vector
     @test max_times ≈ fill(805u"ns", 2)
+
+    # A time axis with Float32 elements and a Float64 step, with one maximum at the window
+    # edge and one inside the window
+    times_mixed = StepRangeLen{typeof(0.0f0u"ns")}(0.0u"ns", 16.0u"ns", n_samples)
+    wvf_edge = RDWaveform(times_mixed, Float32.(signal_start))
+    wvf_inner = RDWaveform(times_mixed, Float32.(signal_mid))
+    @inferred get_wvf_maximum(wvf_edge, times_mixed[1], times_mixed[54])
+    @inferred get_wvf_maximum(wvf_inner, times_mixed[1], times_mixed[54])
+    max_mixed = get_wvf_maximum.(ArrayOfRDWaveforms([wvf_edge, wvf_inner]), times_mixed[1], times_mixed[54])
+    @test max_mixed isa StructArray
+    @test max_mixed.t[1] == times_mixed[1]
+    @test max_mixed.t[2] ≈ times_mixed[51]
+    @test max_mixed.max[1] == 1.0f0
 end
