@@ -18,6 +18,7 @@ using FillArrays
 using IntervalSets
 using RadiationDetectorDSP
 using RadiationDetectorSignals
+using StructArrays
 using Unitful
 using PropDicts
 using Tables
