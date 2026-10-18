@@ -33,21 +33,20 @@ function _get_wvf_maximum_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuant
     @assert axes(X) == axes(Y)
     @assert firstindex(X) <= first(idxs) <= last(idxs) <= lastindex(X)
     @assert firstindex(Y) <= first(idxs) <= last(idxs) <= lastindex(Y)
-    
 
-    @inbounds begin
-        ind_max = argmax(Y[idxs])
-        maxidx = first(idxs) + ind_max - 1
-        if 1 < ind_max < length(idxs)
-            y1, y2, y3 = Y[maxidx-1], Y[maxidx], Y[maxidx+1]
-            wvf_max = extrema3points(y1, y2, y3)
-            δ = (y1 - y3) / (2 * (y1 - 2y2 + y3))
-        else
-            wvf_max = Y[maxidx]
-            δ = zero(Y[maxidx] / Y[maxidx])
-        end
-        t_max = X[maxidx] + step(X) * δ
+    # `maximum` vectorizes, `argmax`/`findmax` do not; `findfirst(isequal(...))` returns the
+    # same index as `argmax`: the first maximum, or the first NaN if the window contains one.
+    Y_window = view(Y, idxs)
+    maxidx = idxs[something(findfirst(isequal(maximum(Y_window)), Y_window))]
+    if first(idxs) < maxidx < last(idxs)
+        y1, y2, y3 = Y[maxidx-1], Y[maxidx], Y[maxidx+1]
+        wvf_max = extrema3points(y1, y2, y3)
+        δ = (y1 - y3) / (2 * (y1 - 2y2 + y3))
+    else
+        wvf_max = Y[maxidx]
+        δ = zero(Y[maxidx] / Y[maxidx])
     end
+    t_max = X[maxidx] + step(X) * δ
 
     (max = wvf_max, t = t_max)
 end
