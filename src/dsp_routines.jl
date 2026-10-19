@@ -50,19 +50,30 @@ Get the Q-drift parameter for each waveform in `wvfs` by integrating the wavefor
 """
 function get_qdrift(wvfs::ArrayOfRDWaveforms, t_start::Array{<:Unitful.Time{<:Real}}, Δt::StepRangeLen{<:Unitful.Time{<:Real}}; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
     # Integrate waveforms with gain = 1
-    wvfs_flt_int = IntegratorFilter(1).(wvfs)
-    
+    _get_qdrift_impl(IntegratorFilter(1).(wvfs), t_start, Δt; pol_power, sign_est_length)
+end
+export get_qdrift
+
+"""
+    _get_qdrift_impl(wvfs_flt_int::ArrayOfRDWaveforms, t_start, Δt; pol_power::Int, sign_est_length::Unitful.Time)
+
+Q-drift parameter as in [`get_qdrift`](@ref), but on waveforms `wvfs_flt_int` that are already
+integrated with `IntegratorFilter(1)`. Lets callers evaluate several start times or windows on
+one integrated batch; `get_qdrift(wvfs, t_start, Δt; kwargs...)` equals
+`_get_qdrift_impl(IntegratorFilter(1).(wvfs), t_start, Δt; kwargs...)`.
+"""
+function _get_qdrift_impl(wvfs_flt_int::ArrayOfRDWaveforms, t_start::Array{<:Unitful.Time{<:Real}}, Δt::StepRangeLen{<:Unitful.Time{<:Real}}; pol_power::Int, sign_est_length::Unitful.Time)
     # define signal estimator filter
     signal_estimator = SignalEstimator(PolynomialDNI(pol_power, sign_est_length))
-    
+
     # calculate area between t_start and t_start + Δt
-    area1  = signal_estimator.(wvfs_flt_int, t_start .+ first(Δt)) .- signal_estimator.(wvfs_flt_int, t_start)
-    area2  = signal_estimator.(wvfs_flt_int, t_start .+ last(Δt)) .- signal_estimator.(wvfs_flt_int, t_start .+ first(Δt))
-    
+    t_mid = t_start .+ first(Δt)
+    area1  = signal_estimator.(wvfs_flt_int, t_mid) .- signal_estimator.(wvfs_flt_int, t_start)
+    area2  = signal_estimator.(wvfs_flt_int, t_start .+ last(Δt)) .- signal_estimator.(wvfs_flt_int, t_mid)
+
     # return qdrift as differenc of areas
     area2 .- area1
 end
-export get_qdrift
 
 """
     get_triggers_reversed((wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")

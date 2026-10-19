@@ -149,13 +149,16 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     wvfs_deriv = DerivativeFilter(1).(wvfs)
     t_amax = get_wvf_maximum.(wvfs_deriv, first(wvfs_deriv[1].time), last(wvfs_deriv[1].time)).t
 
+    # integrate once for the Q-drift and LQ parameters
+    wvfs_flt_int = IntegratorFilter(1).(wvfs)
+
     # get Q-drift parameter
-    qdrift = get_qdrift(wvfs, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    qdrift = _get_qdrift_impl(wvfs_flt_int, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # get LQ parameters
-    lq_80 = get_qdrift(wvfs, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_90 = get_qdrift(wvfs, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_amax = get_qdrift(wvfs, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_80 = _get_qdrift_impl(wvfs_flt_int, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_90 = _get_qdrift_impl(wvfs_flt_int, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_amax = _get_qdrift_impl(wvfs_flt_int, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
@@ -417,13 +420,16 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     wvfs_deriv = DerivativeFilter(1).(wvfs_wdw)
     t_amax = get_wvf_maximum.(wvfs_deriv, first(wvfs_deriv[1].time), last(wvfs_deriv[1].time)).t
 
+    # integrate once for the Q-drift and LQ parameters
+    wvfs_flt_int = IntegratorFilter(1).(wvfs_wdw)
+
     # get Q-drift parameter
-    qdrift = get_qdrift(wvfs_wdw, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    qdrift = _get_qdrift_impl(wvfs_flt_int, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # get LQ parameters
-    lq_80 = get_qdrift(wvfs_wdw, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_90 = get_qdrift(wvfs_wdw, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_amax = get_qdrift(wvfs_wdw, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_80 = _get_qdrift_impl(wvfs_flt_int, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_90 = _get_qdrift_impl(wvfs_flt_int, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_amax = _get_qdrift_impl(wvfs_flt_int, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")

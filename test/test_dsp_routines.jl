@@ -40,3 +40,18 @@ end
     @test length(qdrift) == 1
     @test isfinite(ustrip(qdrift[1]))
 end
+
+@testset "get_qdrift on pre-integrated waveforms" begin
+    times = (0:2047) .* 16.0u"ns"
+    wvfs = ArrayOfRDWaveforms([RDWaveform(times, 10 .* randn(2048) .+ 1000 .* (eachindex(times) .> 1000)) for _ in 1:10])
+    wvfs_int = IntegratorFilter(1).(wvfs)
+    se = SignalEstimator(PolynomialDNI(3, 100u"ns"))
+    for (t_start, Δt) in ((fill(15.0u"µs", 10), 2.5u"µs":0.1u"µs":5.0u"µs"),
+                          (15.0u"µs" .+ 100 .* rand(10) .* u"ns", 1.0u"µs":0.1u"µs":2.0u"µs"))
+        qdrift = get_qdrift(wvfs, t_start, Δt; pol_power=3, sign_est_length=100u"ns")
+        @test qdrift == LegendDSP._get_qdrift_impl(wvfs_int, t_start, Δt; pol_power=3, sign_est_length=100u"ns")
+        # area from t_start + first(Δt) to t_start + last(Δt) minus area from t_start to t_start + first(Δt)
+        @test qdrift == (se.(wvfs_int, t_start .+ last(Δt)) .- se.(wvfs_int, t_start .+ first(Δt))) .-
+                        (se.(wvfs_int, t_start .+ first(Δt)) .- se.(wvfs_int, t_start))
+    end
+end
