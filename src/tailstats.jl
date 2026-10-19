@@ -24,17 +24,18 @@ function _tailstats_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuantity}, 
     @assert firstindex(X) <= first(idxs) <= last(idxs) <= lastindex(X)
     @assert firstindex(Y) <= first(idxs) <= last(idxs) <= lastindex(Y)
 
-    if any(Y[idxs] .<= 0)
-        return (
-            mean = zero(Y[1]),
-            sigma = zero(Y[1]),
-            τ = zero(X[1]/Y[1])     
-        )
-    end
-    
-
     zx = zero(eltype(X))
     zy = zero(eltype(Y))
+
+    # the zero result has the same types as the fit result below
+    if any(Y[idxs] .<= 0)
+        inv_n = inv(length(idxs))
+        return (
+            mean = float(zy) * inv_n,
+            sigma = float(zy) * inv_n,
+            τ = float(zx) * inv_n
+        )
+    end
 
     sum_X::float(typeof(zx)) = zx
     sum_Y::float(typeof(zy)) = zy

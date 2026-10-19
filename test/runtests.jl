@@ -16,6 +16,7 @@ Test.@testset "Package LegendDSP" begin
     include("test_dsp_icpc.jl")
     include("test_dsp_aux.jl")
     include("test_extremestats.jl")
+    include("test_tailstats.jl")
     include("test_thresholdstats.jl")
     include("test_dsp_sipm.jl")
     isempty(Test.detect_ambiguities(LegendDSP))
