@@ -159,13 +159,15 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
-    e_10410  = maximum.((uflt_10410.(wvfs)).signal)
+    e_10410_stats = extremestats.(uflt_10410.(wvfs))
+    e_10410 = e_10410_stats.max
 
     uflt_535 = TrapezoidalChargeFilter(5u"µs", 3u"µs")
     e_535  = maximum.((uflt_535.(wvfs)).signal)
 
     uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
-    e_313  = maximum.((uflt_313.(wvfs)).signal)
+    e_313_stats = extremestats.(uflt_313.(wvfs))
+    e_313 = e_313_stats.max
 
     uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
     e_101010  = maximum.((uflt_101010.(wvfs)).signal)
@@ -215,14 +217,14 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     t50_current = get_threshold(wvfs_sgflt_deriv, thres; mintot=config.kwargs_pars.tx_mintot)
 
+    # inverted waveform maximum for long and short filter (DC tagging): the trapezoidal filters
+    # are linear and floating-point negation is exact, so this is minus the filtered minimum
+    e_10410_max_inv = .-e_10410_stats.min
+    e_313_max_inv = .-e_313_stats.min
+
     # invert waveform for DC tagging
     # wvfs --> wvfs_pz_inv
     wvfs = multiply_waveform.(wvfs, -1.0)
-
-    # get inverted waveform maximum for long and short filter
-    e_10410_max_inv  = maximum.(uflt_10410.(wvfs).signal)
-
-    e_313_max_inv  = maximum.(uflt_313.(wvfs).signal)
 
     # t0 determination
     t0_inv = get_t0(wvfs, t0_threshold; mintot=config.kwargs_pars.t0_mintot)
@@ -482,15 +484,14 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     t50_current = get_threshold(wvfs_sgflt_deriv, thres; mintot=config.kwargs_pars.tx_mintot)
 
+    # inverted waveform maximum for long and short filter (DC tagging): the trapezoidal filters
+    # are linear and floating-point negation is exact, so this is minus the filtered minimum
+    e_10410_max_inv = .-e_10410_stats.min
+    e_313_max_inv = .-e_313_stats.min
+
     # invert waveform for DC tagging
     # wvfs --> wvfs_pz_inv
-    wvfs_pre = multiply_waveform.(wvfs_pre, -1.0)
     wvfs_wdw = multiply_waveform.(wvfs_wdw, -1.0)
-
-    # get inverted waveform maximum for long and short filter
-    e_10410_max_inv  = maximum.(uflt_10410.(wvfs_pre).signal)
-
-    e_313_max_inv  = maximum.(uflt_313.(wvfs_pre).signal)
 
     # inv t0 determination
     t0_inv = get_t0(wvfs_wdw, t0_threshold; mintot=config.kwargs_pars.t0_mintot)

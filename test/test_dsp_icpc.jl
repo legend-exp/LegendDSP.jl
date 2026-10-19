@@ -210,6 +210,17 @@ end
     end
 end
 
+@testset "Inverted trapezoid energies" begin
+    # dsp_icpc and dsp_icpc_compressed take the inverted-waveform maxima as minus the minima
+    # of the filtered waveforms; this holds bitwise for the trapezoidal filters
+    times = (0:2047) .* 128.0u"ns"
+    wvfs = ArrayOfRDWaveforms([RDWaveform(times, 100 .* randn(2048) .+ 1000 .* (eachindex(times) .> 600)) for _ in 1:20])
+    wvfs_inv = LegendDSP.multiply_waveform.(wvfs, -1.0)
+    for flt in (TrapezoidalChargeFilter(10u"µs", 4u"µs"), TrapezoidalChargeFilter(3u"µs", 1u"µs"))
+        @test isequal(maximum.(flt.(wvfs_inv).signal), .-extremestats.(flt.(wvfs)).min)
+    end
+end
+
 @testset "dsp_icpc" begin
     data = make_fake_uncompressed_data(3)
     config = make_fake_config()
