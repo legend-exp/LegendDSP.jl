@@ -115,15 +115,35 @@ function rdfilt!(y::AbstractVector, fi::MovingWindowFilterInstance{T}, x::Abstra
     y
 end
 
-function rdfilt!(y::AbstractVector, fi::MovingWindowMultiFilterInstance{T}, x::AbstractVector
-    ) where T
+function rdfilt!(y::AbstractVector, fi::MovingWindowMultiFilterInstance, x::AbstractVector)
+    axes(y) == axes(x) || throw(DimensionMismatch("input and output must have the same axes, got $(axes(x)) and $(axes(y))"))
+    l = fi.length
+    l >= 1 || throw(ArgumentError("moving window length must be at least one sample, got $l"))
+    # moving window forward, backward and forward again; the second and third pass work in place on y
+    _moving_window_pass!(y, x, eachindex(y), l, Vector{eltype(x)}(undef, l))
+    buf = Vector{eltype(y)}(undef, l)
+    _moving_window_pass!(y, y, reverse(eachindex(y)), l, buf)
+    _moving_window_pass!(y, y, eachindex(y), l, buf)
+end
 
-    _fi = MovingWindowFilterInstance{T}(fi.length, fi.n_input)
-    _y = similar(y)
-    yr = @view y[end:-1:begin]          # reversed view of y
-    _yr = @view _y[end:-1:begin]        # reversed view of _y
-    rdfilt!(_y, _fi, x)
-    rdfilt!(yr, _fi, _yr)
-    copyto!(_y, y)
-    rdfilt!(y, _fi, _y)    
+# One pass of the MovingWindowFilter recursion over the indices `idxs` (in this order):
+#     y[idxs[1]] = x[idxs[1]],  y[idxs[k]] = y[idxs[k-1]] + (x[idxs[k]] - x[idxs[max(k-l, 1)]]) / l
+# The ring buffer `buf` (length `l`) holds the last `l` input values, so `y` may be the same array as `x`.
+function _moving_window_pass!(y::AbstractVector, x::AbstractVector, idxs, l::Int, buf::AbstractVector)
+    invl = 1/l
+    i₁ = first(idxs)
+    x₁ = x[i₁]
+    acc = convert(eltype(y), x₁)
+    y[i₁] = acc
+    # input values before the first index count as x₁
+    fill!(buf, x₁)
+    j = firstindex(buf)
+    for i in Iterators.drop(idxs, 1)
+        xᵢ = x[i]
+        acc = convert(eltype(y), fma(invl, xᵢ - buf[j], acc))
+        y[i] = acc
+        buf[j] = xᵢ
+        j = j == lastindex(buf) ? firstindex(buf) : j + 1
+    end
+    y
 end

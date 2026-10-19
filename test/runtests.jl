@@ -8,6 +8,7 @@ Test.@testset "Package LegendDSP" begin
     include("test_interpolation.jl")
     include("test_intersect_maximum.jl")
     include("test_multiintersect.jl")
+    include("test_moving_window.jl")
     include("test_timeaxis.jl")
     include("test_docs.jl")
     include("test_alternative_filters.jl")
