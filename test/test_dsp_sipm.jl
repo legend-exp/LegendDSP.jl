@@ -6,6 +6,8 @@ using Unitful
 using TypedTables
 using PropDicts
 using StructArrays
+using ArraysOfArrays
+using Random
 
 function make_sipm_waveform(n=6250)
     t = (0:n-1) .* 16.0u"ns"
@@ -106,6 +108,43 @@ end
     # time values should be in µs and within waveform range
     @test all(0.0u"µs" .<= result.t_max .<= 100.0u"µs")
     @test all(0.0u"µs" .<= result.t_min .<= 100.0u"µs")
+end
+
+# Matrix-backed signals with a Float32 time axis, as returned by decode_data,
+# and a mix of events with and without triggers.
+function make_mixed_sipm_data(N=10)
+    rng = MersenneTwister(1)
+    pulse = make_sipm_waveform().signal
+    t = range(0f0u"ns", step=16f0u"ns", length=length(pulse))
+    signals = reduce(hcat, [(isodd(i) ? pulse : zero(pulse)) .+ 0.01 .* randn(rng, length(pulse)) for i in 1:N])
+    Table(
+        waveform    = ArrayOfRDWaveforms((fill(t, N), VectorOfSimilarVectors(signals))),
+        baseline    = fill(0.0f0, N),
+        timestamp   = fill(UInt64(0), N),
+        eventnumber = UInt32.(1:N),
+        daqenergy   = fill(UInt16(0), N),
+    )
+end
+
+@testset "dsp_sipm baseline window" begin
+    data = make_mixed_sipm_data()
+    config = make_sipm_config()
+    result = dsp_sipm(data, config, PropDict(:sg => PropDict(:wl => 200.0u"ns")))
+
+    has_trig = .!isempty.(result.trig_pos)
+    @test any(has_trig) && !all(has_trig)
+
+    # without a trigger, the baseline window is the full waveform
+    @test result.blmean[.!has_trig] ≈ result.wfmean[.!has_trig]
+    @test result.blsigma[.!has_trig] ≈ result.wfsigma[.!has_trig]
+
+    # with a trigger, the baseline window ends at the first trigger
+    wvfs = LegendDSP.shift_waveform.(data.waveform, 0.0)
+    wvfs_int = IntegratorFilter(gain=1).(SavitzkyGolayFilter(200.0u"ns", config.sg_flt_degree, 1).(wvfs))
+    t_min = first(wvfs_int[1].time)
+    for i in findall(has_trig)
+        @test result.blmean[i] ≈ signalstats(wvfs_int[i], t_min, minimum(result.trig_pos[i])).mean
+    end
 end
 
 # Note: dsp_sipm_compressed is not tested here because it requires
