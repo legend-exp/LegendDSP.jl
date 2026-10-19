@@ -80,3 +80,7 @@ function get_fltpars(pd::PropDict, flt::Symbol, dspconfig::DSPConfig)
         end
     end
 end
+
+# Waveforms `wvfs` with sample type `W`; returns `wvfs` itself if its samples already have type `W`.
+_with_sample_type(::Type{W}, wvfs::ArrayOfRDWaveforms) where {W<:Real} =
+    eltype(eltype(wvfs.signal)) == W ? wvfs : ArrayOfRDWaveforms((wvfs.time, deepmap(W, wvfs.signal)))

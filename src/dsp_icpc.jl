@@ -1,10 +1,17 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
+    dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc=missing, wvf_eltype::Type{<:AbstractFloat}=Float64) where {Q <: Table, T<:Real}
 
 DSP for ICPC detectors. It needs the decay time `τ` of the detector and the filter parameters `pars_filter` for the optimal filter parameters
 for the Trap, CUSP and ZAC filter. 
+
+The waveforms are processed with element type `wvf_eltype` (`Float64` by default). With `Float32` the waveform
+batches take half the memory, and the filter maxima, currents and waveform extrema are `Float32`. The energies from
+the signal estimator (`e_trap`, `e_cusp`, `e_zac`), Q-drift and LQ are interpolated in time and have the promoted
+type of `wvf_eltype` and the time axis. Baseline, tail and other window statistics and all time parameters keep
+their types.
+
 # Input data
 The input data is a table with the following columns:
 - `waveform`: waveform data
@@ -65,7 +72,7 @@ The output data is a table with the following columns:
 - `n_sat_low_cons`: number of consecutive samples the waveform is saturated at low of FADC range
 - `n_sat_high_cons`: number of consecutive samples the waveform is saturated at high of FADC range
 """
-function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where {Q <: Table, T<:Real}
+function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing, wvf_eltype::Type{W}=Float64) where {Q <: Table, T<:Real, W<:AbstractFloat}
     # get config parameters
     bl_window                = config.bl_window
     t0_threshold             = config.t0_threshold
@@ -110,7 +117,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
-    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+    wvfs = _with_sample_type(W, shift_waveform.(wvfs, -W.(bl_stats.mean)))
 
     # get QC classifier labels (skip expensive ML classification if no model)
     qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier(wvfs, f_evaluate_qc)) : fill(-1, length(wvfs))
@@ -227,7 +234,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     # invert waveform for DC tagging
     # wvfs --> wvfs_pz_inv
-    wvfs = multiply_waveform.(wvfs, -1.0)
+    wvfs = multiply_waveform.(wvfs, -one(W))
 
     # t0 determination
     t0_inv = get_t0(wvfs, t0_threshold; mintot=config.kwargs_pars.t0_mintot)
@@ -259,10 +266,17 @@ export dsp_icpc
 
 
 """
-    dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
+    dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc=missing, wvf_eltype::Type{<:AbstractFloat}=Float64) where {Q <: Table, T<:Real}
 
 DSP for ICPC detectors. It needs the decay time `τ` of the detector and the filter parameters `pars_filter` for the optimal filter parameters
 for the Trap, CUSP and ZAC filter. 
+
+The waveforms are processed with element type `wvf_eltype` (`Float64` by default). With `Float32` the waveform
+batches take half the memory, and the filter maxima, currents and waveform extrema are `Float32`. The energies from
+the signal estimator (`e_trap`, `e_cusp`, `e_zac`), Q-drift and LQ are interpolated in time and have the promoted
+type of `wvf_eltype` and the time axis. Baseline, tail and other window statistics and all time parameters keep
+their types.
+
 # Input data
 The input data is a table with the following columns:
 - `waveform`: waveform data
@@ -323,7 +337,7 @@ The output data is a table with the following columns:
 - `n_sat_low_cons`: number of consecutive samples the waveform is saturated at low of FADC range
 - `n_sat_high_cons`: number of consecutive samples the waveform is saturated at high of FADC range
 """
-function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where {Q <: Table, T<:Real}
+function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing, wvf_eltype::Type{W}=Float64) where {Q <: Table, T<:Real, W<:AbstractFloat}
     # get config parameters
     bl_window                = config.bl_window
     t0_threshold             = config.t0_threshold
@@ -375,8 +389,8 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     bl_stats = signalstats.(wvfs_pre, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
-    wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
-    wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate_value)
+    wvfs_pre = _with_sample_type(W, shift_waveform.(wvfs_pre, -W.(bl_stats.mean)))
+    wvfs_wdw = _with_sample_type(W, shift_waveform.(wvfs_wdw, -W.(bl_stats.mean ./ presum_rate_value)))
 
     # get QC classifier labels (skip expensive ML classification if no model)
     qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)) : fill(-1, length(wvfs_pre))
@@ -497,7 +511,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     # invert waveform for DC tagging
     # wvfs --> wvfs_pz_inv
-    wvfs_wdw = multiply_waveform.(wvfs_wdw, -1.0)
+    wvfs_wdw = multiply_waveform.(wvfs_wdw, -one(W))
 
     # inv t0 determination
     t0_inv = get_t0(wvfs_wdw, t0_threshold; mintot=config.kwargs_pars.t0_mintot)
