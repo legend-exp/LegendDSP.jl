@@ -104,7 +104,7 @@ function rdfilt!(y::AbstractVector, fi::MovingWindowFilterInstance{T}, x::Abstra
     x₁ = x[begin]
     y[begin] = x₁
     l = fi.length
-    invl = 1/l
+    invl = one(eltype(y)) / l
     @inbounds @simd for i in 2:l
         y[i] = fma(invl, x[i] - x₁, y[i-1])     # yₙ = yₙ₋₁ + (xₙ - x₁)/l
     end
@@ -130,7 +130,7 @@ end
 #     y[idxs[1]] = x[idxs[1]],  y[idxs[k]] = y[idxs[k-1]] + (x[idxs[k]] - x[idxs[max(k-l, 1)]]) / l
 # The ring buffer `buf` (length `l`) holds the last `l` input values, so `y` may be the same array as `x`.
 function _moving_window_pass!(y::AbstractVector, x::AbstractVector, idxs, l::Int, buf::AbstractVector)
-    invl = 1/l
+    invl = one(eltype(y)) / l
     i₁ = first(idxs)
     x₁ = x[i₁]
     acc = convert(eltype(y), x₁)
