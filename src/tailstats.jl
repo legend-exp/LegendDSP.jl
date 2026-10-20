@@ -24,7 +24,8 @@ function _tailstats_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuantity}, 
     @assert firstindex(X) <= first(idxs) <= last(idxs) <= lastindex(X)
     @assert firstindex(Y) <= first(idxs) <= last(idxs) <= lastindex(Y)
 
-    zx = zero(eltype(X))
+    # x is accumulated with at least the floating-point precision of y
+    zx = zero(eltype(X)) * one(float(eltype(Y)))
     zy = zero(eltype(Y))
 
     # the zero result has the same types as the fit result below
@@ -43,8 +44,12 @@ function _tailstats_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuantity}, 
     sum_Y_sqr::float(typeof(zy * zy)) = zy * zy
     sum_XY::float(typeof(zx * zy)) = zx * zy
 
-    @inbounds @fastmath @simd for i in idxs
-        x, y = X[i], log(Y[i])
+    # Sums are taken relative to the first point of the window, so the variances
+    # do not suffer from cancellation when the mean is large compared to the spread.
+    # No `@fastmath` here: reassociation could undo the shift.
+    x0, y0 = convert(typeof(zx), X[first(idxs)]), log(Y[first(idxs)])
+    @inbounds @simd for i in idxs
+        x, y = convert(typeof(zx), X[i]) - x0, log(Y[i]) - y0
         sum_X = x + sum_X
         sum_X_sqr = fma(x, x, sum_X_sqr)
         sum_Y = y + sum_Y
@@ -66,7 +71,7 @@ function _tailstats_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuantity}, 
     var_Y = ifelse(var_Y < 0, zero(var_Y), var_Y)
 
     (
-        mean = mean_Y,
+        mean = mean_Y + y0,
         sigma = sqrt(var_Y),
         τ = -1/slope        
     )
