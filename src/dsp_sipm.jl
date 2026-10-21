@@ -114,7 +114,7 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     time_max = last(wvfs_int[1].time)
     # baseline window ends at the first trigger (end of waveform if none), but spans at least 3 samples
     t_bl_min = time_min + 3*step(wvfs_int[1].time)
-    t_bl_stop = map(x -> max(minimum(x; init = time_max), t_bl_min), inters.x)
+    t_bl_stop = map(x -> oftype(time_max, max(minimum(x; init = time_max), t_bl_min)), inters.x)
     bl_stats = signalstats.(wvfs_int, time_min, t_bl_stop)
     sigstats = signalstats.(wvfs_int, time_min, time_max)
     
@@ -278,7 +278,7 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     time_max = last(wvfs_int[1].time)
     # baseline window ends at the first trigger (end of waveform if none), but spans at least 3 samples
     t_bl_min = time_min + 3*step(wvfs_int[1].time)
-    t_bl_stop = map(x -> max(minimum(x; init = time_max), t_bl_min), inters.x)
+    t_bl_stop = map(x -> oftype(time_max, max(minimum(x; init = time_max), t_bl_min)), inters.x)
     bl_stats = signalstats.(wvfs_int, time_min, t_bl_stop)
     sigstats = signalstats.(wvfs_int, time_min, time_max)
     
