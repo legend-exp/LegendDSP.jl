@@ -26,12 +26,12 @@ The output data is a table with the following columns:
 - `blmean`, `blsigma`, `blslope`, `bloffset`: baseline statistics
 - `wfmean`, `wfsigma`, `wfslope`, `wfoffset`: waveform statistics
 ## SG filter columns
-- `threshold`: SG trigger threshold
-- `threshold_DC`: SG discharge trigger threshold
-- `trig_pos`: SG trigger positions
-- `trig_max`: SG trigger maxima
-- `trig_pos_DC`: SG discharge trigger positions
-- `trig_max_DC`: SG discharge trigger maxima
+- `threshold_sg`: SG trigger threshold
+- `threshold_DC_sg`: SG discharge trigger threshold
+- `trig_pos_sg`: SG trigger positions
+- `trig_max_sg`: SG trigger maxima
+- `trig_pos_DC_sg`: SG discharge trigger positions
+- `trig_max_DC_sg`: SG discharge trigger maxima
 ## Trap filter columns
 - `threshold_trap`: trap trigger threshold
 - `threshold_DC_trap`: trap discharge trigger threshold
@@ -149,9 +149,9 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
         wfmean = sigstats.mean, wfsigma = sigstats.sigma, wfslope = sigstats.slope, wfoffset = sigstats.offset,
         # SG triggers
-        threshold = inters_thres, threshold_DC = inters_thres_DC,
-        trig_pos = VectorOfVectors(inters.x), trig_max = VectorOfVectors(inters.max),
-        trig_pos_DC = VectorOfVectors(inters_DC.x), trig_max_DC = VectorOfVectors(inters_DC.max),
+        threshold_sg = inters_thres, threshold_DC_sg = inters_thres_DC,
+        trig_pos_sg = VectorOfVectors(inters.x), trig_max_sg = VectorOfVectors(inters.max),
+        trig_pos_DC_sg = VectorOfVectors(inters_DC.x), trig_max_DC_sg = VectorOfVectors(inters_DC.max),
         # Trap triggers
         threshold_trap = inters_thres_trap, threshold_DC_trap = inters_thres_DC_trap,
         trig_pos_trap = VectorOfVectors(inters_trap.x), trig_pos_high_trap = VectorOfVectors(inters_trap.x_high),
@@ -190,12 +190,12 @@ The output data is a table with the following columns:
 - `blmean`, `blsigma`, `blslope`, `bloffset`: baseline statistics
 - `wfmean`, `wfsigma`, `wfslope`, `wfoffset`: waveform statistics
 ## SG filter columns
-- `threshold`: SG trigger threshold
-- `threshold_DC`: SG discharge trigger threshold
-- `trig_pos`: SG trigger positions
-- `trig_max`: SG trigger maxima
-- `trig_pos_DC`: SG discharge trigger positions
-- `trig_max_DC`: SG discharge trigger maxima
+- `threshold_sg`: SG trigger threshold
+- `threshold_DC_sg`: SG discharge trigger threshold
+- `trig_pos_sg`: SG trigger positions
+- `trig_max_sg`: SG trigger maxima
+- `trig_pos_DC_sg`: SG discharge trigger positions
+- `trig_max_DC_sg`: SG discharge trigger maxima
 ## Trap filter columns
 - `threshold_trap`: trap trigger threshold
 - `threshold_DC_trap`: trap discharge trigger threshold
@@ -313,9 +313,9 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
         wfmean = sigstats.mean, wfsigma = sigstats.sigma, wfslope = sigstats.slope, wfoffset = sigstats.offset,
         # SG triggers
-        threshold = inters_thres, threshold_DC = inters_thres_DC,
-        trig_pos = VectorOfVectors(inters.x), trig_max = VectorOfVectors(inters.max),
-        trig_pos_DC = VectorOfVectors(inters_DC.x), trig_max_DC = VectorOfVectors(inters_DC.max),
+        threshold_sg = inters_thres, threshold_DC_sg = inters_thres_DC,
+        trig_pos_sg = VectorOfVectors(inters.x), trig_max_sg = VectorOfVectors(inters.max),
+        trig_pos_DC_sg = VectorOfVectors(inters_DC.x), trig_max_DC_sg = VectorOfVectors(inters_DC.max),
         # Trap triggers
         threshold_trap = inters_thres_trap, threshold_DC_trap = inters_thres_DC_trap,
         trig_pos_trap = VectorOfVectors(inters_trap.x), trig_pos_high_trap = VectorOfVectors(inters_trap.x_high),

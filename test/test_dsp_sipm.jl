@@ -86,8 +86,8 @@ end
         :e_max, :e_min, :e_max_lar, :e_min_lar,
         :blmean, :blsigma, :blslope, :bloffset,
         :wfmean, :wfsigma, :wfslope, :wfoffset,
-        :threshold, :threshold_DC,
-        :trig_pos, :trig_max, :trig_pos_DC, :trig_max_DC,
+        :threshold_sg, :threshold_DC_sg,
+        :trig_pos_sg, :trig_max_sg, :trig_pos_DC_sg, :trig_max_DC_sg,
         :threshold_trap, :threshold_DC_trap,
         :trig_pos_trap, :trig_pos_high_trap, :trig_pos_tot_trap, :trig_max_trap,
         :trig_pos_DC_trap, :trig_pos_high_DC_trap, :trig_pos_tot_DC_trap, :trig_max_DC_trap]
@@ -100,8 +100,8 @@ end
     @test result.eventID_fadc == UInt32.(1:10)
 
     # thresholds should be finite and non-negative
-    @test all(isfinite.(result.threshold))
-    @test all(result.threshold .>= 0)
+    @test all(isfinite.(result.threshold_sg))
+    @test all(result.threshold_sg .>= 0)
     @test all(isfinite.(result.threshold_trap))
     @test all(result.threshold_trap .>= 0)
 
@@ -131,7 +131,7 @@ end
     config = make_sipm_config()
     result = dsp_sipm(data, config, PropDict(:sg => PropDict(:wl => 200.0u"ns")))
 
-    has_trig = .!isempty.(result.trig_pos)
+    has_trig = .!isempty.(result.trig_pos_sg)
     @test any(has_trig) && !all(has_trig)
 
     # without a trigger, the baseline window is the full waveform
@@ -143,7 +143,7 @@ end
     wvfs_int = IntegratorFilter(gain=1).(SavitzkyGolayFilter(200.0u"ns", config.sg_flt_degree, 1).(wvfs))
     t_min = first(wvfs_int[1].time)
     for i in findall(has_trig)
-        @test result.blmean[i] ≈ signalstats(wvfs_int[i], t_min, minimum(result.trig_pos[i])).mean
+        @test result.blmean[i] ≈ signalstats(wvfs_int[i], t_min, minimum(result.trig_pos_sg[i])).mean
     end
 end
 
