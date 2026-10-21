@@ -39,8 +39,12 @@ The output data is a table with the following columns:
 - `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313`: energy of waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
 - `e_101010`: energy of waveform with trapezoidal filter of 10µs rise time with 10µs flat-top
-- `a_mwa`: maximum of the raw current (simple derivative) after moving-window-average shaping with the optimized window length from the `aoeopt` pars
-- `a_mwa_48`, `a_mwa_288`, `a_mwa_576`: maximum of the raw current (simple derivative) after moving-window-average shaping with fixed 48/288/576 ns windows
+- `a_sg`: maximum of the current from the Savitzky-Golay derivative (`sg_flt_degree`) with the optimized window length from the `aoeopt` pars
+- `a_sg_<ns>`: the same with the fixed window lengths `a_sg_windows` of the config
+- `a_raw`: maximum of the raw current (simple derivative)
+- `a_mwa`: maximum of the raw current after the multi-pass moving-window average (`a_mwa_passes`, alternating left and right) with the optimized window length from the `aoeopt` pars
+- `a_mwa_<ns>`: the same with the fixed window lengths `a_mwa_windows` of the config
+- `t_a_sg`, `t_a_mwa`: quadratically interpolated timepoints of the `a_sg` and `a_mwa` maxima
 - `e_10410_inv`: maximum of inverted waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313_inv`: maximum of inverted waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
 - `t0_inv`: start time of inverted waveform drift
@@ -51,7 +55,6 @@ The output data is a table with the following columns:
 - `lq_80`: LQ parameter evaluated at `t80`
 - `lq_90`: LQ parameter evaluated at `t90`
 - `lq_amax`: LQ parameter evaluated at `t_amax`
-- `a`: current maximum with optimal Savitzky-Golay filter length parameter
 - `blfc`: baseline from FADC
 - `timestamp`: timestamp from FADC
 - `eventID_fadc`: event ID from FADC
@@ -196,15 +199,15 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     # extract current with optimal SG filter length with second order polynominal and first derivative
     wvfs_sgflt_deriv = SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs)
-    a_sg = get_wvf_maximum.(wvfs_sgflt_deriv, leftendpoint(current_window), rightendpoint(current_window)).max
+    a_sg_max = get_a(wvfs_sgflt_deriv, current_window)
+    a_sg, t_a_sg = a_sg_max.max, a_sg_max.t
 
-    a_60 = get_wvf_maximum.(SavitzkyGolayFilter(60u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_100 = get_wvf_maximum.(SavitzkyGolayFilter(100u"ns", sg_flt_degree, 1).(wvfs), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_raw = get_wvf_maximum.(wvfs_deriv, leftendpoint(current_window), rightendpoint(current_window)).max
-    a_mwa_48  = get_wvf_maximum.(MovingWindowMultiFilter(48u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_mwa_288 = get_wvf_maximum.(MovingWindowMultiFilter(288u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_mwa_576 = get_wvf_maximum.(MovingWindowMultiFilter(576u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_mwa     = get_wvf_maximum.(MovingWindowMultiFilter(mwa_wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
+    a_raw = get_a(wvfs_deriv, current_window).max
+    a_mwa_max = get_a(MovingWindowMultiFilter(mwa_wl; passes = config.a_mwa_passes).(wvfs_deriv), current_window)
+    a_mwa, t_a_mwa = a_mwa_max.max, a_mwa_max.t
+
+    a_sg_fixed  = NamedTuple(Symbol(:a_sg_,  round(Int, ustrip(u"ns", wl))) => get_a(SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs), current_window).max for wl in config.a_sg_windows)
+    a_mwa_fixed = NamedTuple(Symbol(:a_mwa_, round(Int, ustrip(u"ns", wl))) => get_a(MovingWindowMultiFilter(wl; passes = config.a_mwa_passes).(wvfs_deriv), current_window).max for wl in config.a_mwa_windows)
 
     # get in-trace pile-up
     inTrace_pileUp = get_triggers(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
@@ -228,11 +231,11 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     t0_inv = get_t0(wvfs, t0_threshold; mintot=config.kwargs_pars.t0_mintot)
 
     # output Table 
-    return TypedTables.Table(blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
+    return TypedTables.Table(; blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
     tailmean = pz_stats.mean, tailsigma = pz_stats.sigma, tailslope = pz_stats.slope, tailoffset = pz_stats.offset,
     qc_label = qc_labels,
     t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99,
-    t50_current = t50_current, t_amax = t_amax,
+    t50_current = t50_current, t_amax = t_amax, t_a_sg = t_a_sg, t_a_mwa = t_a_mwa,
     drift_time = drift_time,
     tail_τ = tail_stats.τ, tail_mean = tail_stats.mean, tail_sigma = tail_stats.sigma,
     e_max = wvf_max, e_min = wvf_min,
@@ -243,8 +246,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
     t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
     qdrift = qdrift, lq_80 = lq_80, lq_90 = lq_90, lq_amax = lq_amax,
-    a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
-        a_mwa = a_mwa, a_mwa_48 = a_mwa_48, a_mwa_288 = a_mwa_288, a_mwa_576 = a_mwa_576,
+    a_sg = a_sg, a_raw = a_raw, a_mwa = a_mwa, a_sg_fixed..., a_mwa_fixed...,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
     inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
     n_sat_low = sat_stats.low, n_sat_high = sat_stats.high, n_sat_low_cons = sat_stats.max_cons_low, n_sat_high_cons = sat_stats.max_cons_high
@@ -292,8 +294,12 @@ The output data is a table with the following columns:
 - `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313`: energy of waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
 - `e_101010`: energy of waveform with trapezoidal filter of 10µs rise time with 10µs flat-top
-- `a_mwa`: maximum of the raw current (simple derivative) after moving-window-average shaping with the optimized window length from the `aoeopt` pars
-- `a_mwa_48`, `a_mwa_288`, `a_mwa_576`: maximum of the raw current (simple derivative) after moving-window-average shaping with fixed 48/288/576 ns windows
+- `a_sg`: maximum of the current from the Savitzky-Golay derivative (`sg_flt_degree`) with the optimized window length from the `aoeopt` pars
+- `a_sg_<ns>`: the same with the fixed window lengths `a_sg_windows` of the config
+- `a_raw`: maximum of the raw current (simple derivative)
+- `a_mwa`: maximum of the raw current after the multi-pass moving-window average (`a_mwa_passes`, alternating left and right) with the optimized window length from the `aoeopt` pars
+- `a_mwa_<ns>`: the same with the fixed window lengths `a_mwa_windows` of the config
+- `t_a_sg`, `t_a_mwa`: quadratically interpolated timepoints of the `a_sg` and `a_mwa` maxima
 - `e_10410_inv`: maximum of inverted waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
 - `e_313_inv`: maximum of inverted waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
 - `t0_inv`: start time of inverted waveform drift
@@ -304,7 +310,6 @@ The output data is a table with the following columns:
 - `lq_80`: LQ parameter evaluated at `t80`
 - `lq_90`: LQ parameter evaluated at `t90`
 - `lq_amax`: LQ parameter evaluated at `t_amax`
-- `a`: current maximum with optimal Savitzky-Golay filter length parameter
 - `blfc`: baseline from FADC
 - `timestamp`: timestamp from FADC
 - `eventID_fadc`: event ID from FADC
@@ -461,15 +466,14 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     e_zac_extremestats = extremestats.(wvfs_flt)
 
     # extract current with optimal SG filter length with second order polynominal and first derivative
-    a_raw = get_wvf_maximum.(wvfs_deriv, leftendpoint(current_window), rightendpoint(current_window)).max
-    a_mwa_48  = get_wvf_maximum.(MovingWindowMultiFilter(48u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_mwa_288 = get_wvf_maximum.(MovingWindowMultiFilter(288u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_mwa_576 = get_wvf_maximum.(MovingWindowMultiFilter(576u"ns").(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_mwa     = get_wvf_maximum.(MovingWindowMultiFilter(mwa_wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
+    a_raw = get_a(wvfs_deriv, current_window).max
+    a_mwa_max = get_a(MovingWindowMultiFilter(mwa_wl; passes = config.a_mwa_passes).(wvfs_deriv), current_window)
+    a_sg_max  = get_a(SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs_wdw), current_window)
+    a_mwa, t_a_mwa = a_mwa_max.max, a_mwa_max.t
+    a_sg,  t_a_sg  = a_sg_max.max,  a_sg_max.t
 
-    a_sg = get_wvf_maximum.(SavitzkyGolayFilter(sg_wl, sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_60 = get_wvf_maximum.(SavitzkyGolayFilter(60u"ns", sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window)).max
-    a_100 = get_wvf_maximum.(SavitzkyGolayFilter(100u"ns", sg_flt_degree, 1).(wvfs_wdw), leftendpoint(current_window), rightendpoint(current_window)).max
+    a_sg_fixed  = NamedTuple(Symbol(:a_sg_,  round(Int, ustrip(u"ns", wl))) => get_a(SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs_wdw), current_window).max for wl in config.a_sg_windows)
+    a_mwa_fixed = NamedTuple(Symbol(:a_mwa_, round(Int, ustrip(u"ns", wl))) => get_a(MovingWindowMultiFilter(wl; passes = config.a_mwa_passes).(wvfs_deriv), current_window).max for wl in config.a_mwa_windows)
 
     # Trigger filter with trapezoidal filter
     trig_flt = TrapezoidalChargeFilter(2u"µs", 1u"µs")
@@ -496,7 +500,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     t0_inv = get_t0(wvfs_wdw, t0_threshold; mintot=config.kwargs_pars.t0_mintot)
 
     # output Table 
-    return TypedTables.Table(
+    return TypedTables.Table(;
         # fadc parameters
         blfc=blfc, timestamp=ts, eventID_fadc=evID, e_fc=efc, deadtime=deadtime,
         # saturation parameters 
@@ -517,7 +521,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         auxpz2_mean = auxpz2_stats.mean, auxpz2_sigma = auxpz2_stats.sigma, auxpz2_slope_sigma = auxpz2_stats.slope_residual_sigma,
         # timing parameters
         t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99, t50_pre = t50_pre,
-        drift_time = drift_time, t50_current = t50_current, t_amax = t_amax,
+        drift_time = drift_time, t50_current = t50_current, t_amax = t_amax, t_a_sg = t_a_sg, t_a_mwa = t_a_mwa,
         # energies (fixed and trap/cusp/zac) & extrema of trap/cusp/zac 
         e_10410 = e_10410_stats.max, e_535 = e_535_stats.max, e_313 = e_313_stats.max, e_101010 = e_101010_stats.max,
         t_10410 = e_10410_stats.tmax, t_535 = e_535_stats.tmax, t_313 = e_313_stats.tmax, t_101010 = e_101010_stats.tmax,
@@ -527,8 +531,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         # Qdrift & LQ
         qdrift = qdrift, lq_80 = lq_80, lq_90 = lq_90, lq_amax = lq_amax,
         # currents
-        a_sg = a_sg, a_60 = a_60, a_100 = a_100, a_raw = a_raw,
-        a_mwa = a_mwa, a_mwa_48 = a_mwa_48, a_mwa_288 = a_mwa_288, a_mwa_576 = a_mwa_576,
+        a_sg = a_sg, a_raw = a_raw, a_mwa = a_mwa, a_sg_fixed..., a_mwa_fixed...,
         # trigger
         trigger_position = triggers.intersect, trigger_multiplicity = triggers.n,
         # inverse parameters

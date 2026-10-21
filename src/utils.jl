@@ -56,6 +56,11 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         let g = get(dsp_metadata, :a_grid_wl_mwa, dsp_metadata.a_grid_wl_sg)
             g.start:g.step:g.stop
         end,
+        # fixed MWA window lengths stored as `a_mwa_<ns>` columns and number of alternating moving average passes
+        dsp_metadata.a_mwa_windows,
+        dsp_metadata.a_mwa_passes,
+        # fixed SG window lengths stored as `a_sg_<ns>` columns
+        dsp_metadata.a_sg_windows,
         
         # flt defaults
         dsp_metadata.flt_defaults,

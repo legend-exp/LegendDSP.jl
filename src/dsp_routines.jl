@@ -42,6 +42,15 @@ function get_threshold(wvfs::ArrayOfRDWaveforms, threshold::Union{Array{T}, T}; 
 end
 export get_threshold
 
+"""
+    get_a(wvfs::ArrayOfRDWaveforms, current_window::ClosedInterval{<:Unitful.Time{<:Real}})
+
+Maximum of the current waveforms `wvfs` in `current_window`, quadratically interpolated around the maximum sample
+(`get_wvf_maximum`). Returns the maxima `max` and their timepoints `t`.
+"""
+get_a(wvfs::ArrayOfRDWaveforms, current_window::ClosedInterval{<:Unitful.Time{<:Real}}) = get_wvf_maximum.(wvfs, leftendpoint(current_window), rightendpoint(current_window))
+export get_a
+
 
 """
     get_qdrift(wvfs::ArrayOfRDWaveforms, t_start::Array{Unitful.Time{T}}, Δt::UnitRange{Unitful.Time{T}}; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")

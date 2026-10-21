@@ -600,7 +600,7 @@ function dsp_mwa_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Q
     wvfs_deriv = DerivativeFilter(1).(wvfs)
     aoe_grid   = ones(Float64, length(a_grid_wl_mwa), length(wvfs))
     for (w, wl) in enumerate(a_grid_wl_mwa)
-        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
+        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl; passes = config.a_mwa_passes).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
         aoe_grid[w, :] = ustrip.(a_mwa) ./ e_rtft
     end
     return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft,
@@ -672,7 +672,7 @@ function dsp_mwa_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre:
     wvfs_deriv = DerivativeFilter(1).(wvfs_wdw)
     aoe_grid   = ones(Float64, length(a_grid_wl_mwa), length(wvfs_wdw))
     for (w, wl) in enumerate(a_grid_wl_mwa)
-        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
+        a_mwa = get_wvf_maximum.(MovingWindowMultiFilter(wl; passes = config.a_mwa_passes).(wvfs_deriv), leftendpoint(current_window), rightendpoint(current_window)).max
         aoe_grid[w, :] = ustrip.(a_mwa) ./ e_rtft
     end
     return TypedTables.Table(aoe = VectorOfSimilarVectors(aoe_grid), energy = e_rtft,
