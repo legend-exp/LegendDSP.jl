@@ -38,8 +38,11 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         dsp_metadata.current_window.min .. dsp_metadata.current_window.max,
         # Integration length for QDrift extraction
         (first(dsp_metadata.qdrift_int_length):0.1*unit(first(dsp_metadata.qdrift_int_length)):last(dsp_metadata.qdrift_int_length)),
-        # Integration length for LQ extraction
-        (first(dsp_metadata.lq_int_length):0.1*unit(first(dsp_metadata.qdrift_int_length)):last(dsp_metadata.lq_int_length)),
+        # (early, gap, late) integration windows of the LQ parameters
+        let w = dsp_metadata.lq_windows
+            all(length(x) == 3 for x in w) || throw(ArgumentError("lq_windows must be [early, gap, late] triples, got $w"))
+            [collect(x) for x in w]
+        end,
 
         # rise and flat-top time grid scan ranges for trapezoidal filter
         dsp_metadata.e_grid_trap.rt.start:dsp_metadata.e_grid_trap.rt.step:dsp_metadata.e_grid_trap.rt.stop,
@@ -84,4 +87,16 @@ function get_fltpars(pd::PropDict, flt::Symbol, dspconfig::DSPConfig)
             return get(pd[flt], :rt, dspconfig.default_flt_param[flt].rt), get(pd[flt], :ft, dspconfig.default_flt_param[flt].ft)
         end
     end
+end
+
+"""
+    _lq_column_name(t_start::Symbol, windows)
+
+Column name of an LQ parameter: `lq<start>_<early><gap><late>` with the start timepoint without its leading `t`/`t_`
+and the three window lengths in units of 0.1 µs with two digits, e.g. `_lq_column_name(:t80, [2.5, 0.0, 2.5]u"µs") == :lq80_250025`.
+"""
+function _lq_column_name(t_start::Symbol, windows)
+    start = replace(String(t_start), r"^t_?" => "")
+    lengths = join(lpad(string(round(Int, 10 * ustrip(u"µs", w))), 2, '0') for w in windows)
+    Symbol("lq", start, "_", lengths)
 end

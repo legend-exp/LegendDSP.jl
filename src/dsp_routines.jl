@@ -74,6 +74,20 @@ end
 export get_qdrift
 
 """
+    get_lq(wvfs_int::ArrayOfRDWaveforms, t_start::Array{<:Unitful.Time}, early::Unitful.Time, gap::Unitful.Time, late::Unitful.Time; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
+
+LQ parameter: charge in the late window `[t_start + early + gap, t_start + early + gap + late]` minus the charge in the
+early window `[t_start, t_start + early]`. `wvfs_int` are the integrated waveforms (`IntegratorFilter(1).(wvfs)`), so the
+integration is done once for all LQ variants. `get_qdrift(wvfs, t, Δt)` equals `get_lq(wvfs_int, t, first(Δt), 0, last(Δt) - first(Δt))`.
+"""
+function get_lq(wvfs_int::ArrayOfRDWaveforms, t_start::Array{<:Unitful.Time{<:Real}}, early::Unitful.Time, gap::Unitful.Time, late::Unitful.Time; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
+    signal_estimator = SignalEstimator(PolynomialDNI(pol_power, sign_est_length))
+    t_late = t_start .+ (early + gap)
+    (signal_estimator.(wvfs_int, t_late .+ late) .- signal_estimator.(wvfs_int, t_late)) .- (signal_estimator.(wvfs_int, t_start .+ early) .- signal_estimator.(wvfs_int, t_start))
+end
+export get_lq
+
+"""
     get_triggers_reversed((wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
 
 Determine trigger positions and multiplicities from waveforms.

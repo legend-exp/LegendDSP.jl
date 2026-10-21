@@ -52,9 +52,7 @@ The output data is a table with the following columns:
 - `e_cusp`: energy of waveform with CUSP filter of optimized rise and flat-top time
 - `e_zac`: energy of waveform with ZAC filter of optimized rise and flat-top time
 - `qdrift`: Q-drift parameter
-- `lq_80`: LQ parameter evaluated at `t80`
-- `lq_90`: LQ parameter evaluated at `t90`
-- `lq_amax`: LQ parameter evaluated at `t_amax`
+- `lq80_<early><gap><late>`, `lq90_…`, `lqamax_…`: LQ parameters from `t80`, `t90` and `t_amax`, charge in the late window minus charge in the early window, one column per `[early, gap, late]` of `lq_windows` in the config (lengths in 0.1 µs, e.g. `lq80_250025`: 2.5 µs early, no gap, 2.5 µs late)
 - `blfc`: baseline from FADC
 - `timestamp`: timestamp from FADC
 - `eventID_fadc`: event ID from FADC
@@ -77,7 +75,6 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     sg_flt_degree            = config.sg_flt_degree
     current_window           = config.current_window
     qdrift_int_length        = config.qdrift_int_length
-    lq_int_length            = config.lq_int_length
     
     # get optimal filter parameters
     trap_rt, trap_ft = get_fltpars(pars_filter, :trap, config)
@@ -156,9 +153,10 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     qdrift = get_qdrift(wvfs, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # get LQ parameters
-    lq_80 = get_qdrift(wvfs, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_90 = get_qdrift(wvfs, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_amax = get_qdrift(wvfs, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    wvfs_int = IntegratorFilter(1).(wvfs)
+    lq80   = NamedTuple(_lq_column_name(:t80, w)    => get_lq(wvfs_int, t80, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
+    lq90   = NamedTuple(_lq_column_name(:t90, w)    => get_lq(wvfs_int, t90, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
+    lqamax = NamedTuple(_lq_column_name(:t_amax, w) => get_lq(wvfs_int, t_amax, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
@@ -245,7 +243,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
     e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
     t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
-    qdrift = qdrift, lq_80 = lq_80, lq_90 = lq_90, lq_amax = lq_amax,
+    qdrift = qdrift, lq80..., lq90..., lqamax...,
     a_sg = a_sg, a_raw = a_raw, a_mwa = a_mwa, a_sg_fixed..., a_mwa_fixed...,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
     inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
@@ -307,9 +305,7 @@ The output data is a table with the following columns:
 - `e_cusp`: energy of waveform with CUSP filter of optimized rise and flat-top time
 - `e_zac`: energy of waveform with ZAC filter of optimized rise and flat-top time
 - `qdrift`: Q-drift parameter
-- `lq_80`: LQ parameter evaluated at `t80`
-- `lq_90`: LQ parameter evaluated at `t90`
-- `lq_amax`: LQ parameter evaluated at `t_amax`
+- `lq80_<early><gap><late>`, `lq90_…`, `lqamax_…`: LQ parameters from `t80`, `t90` and `t_amax`, charge in the late window minus charge in the early window, one column per `[early, gap, late]` of `lq_windows` in the config (lengths in 0.1 µs, e.g. `lq80_250025`: 2.5 µs early, no gap, 2.5 µs late)
 - `blfc`: baseline from FADC
 - `timestamp`: timestamp from FADC
 - `eventID_fadc`: event ID from FADC
@@ -332,7 +328,6 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     sg_flt_degree            = config.sg_flt_degree
     current_window           = config.current_window
     qdrift_int_length        = config.qdrift_int_length
-    lq_int_length            = config.lq_int_length
     
     # get optimal filter parameters
     trap_rt, trap_ft = get_fltpars(pars_filter, :trap, config)
@@ -424,9 +419,10 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     qdrift = get_qdrift(wvfs_wdw, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # get LQ parameters
-    lq_80 = get_qdrift(wvfs_wdw, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_90 = get_qdrift(wvfs_wdw, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_amax = get_qdrift(wvfs_wdw, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    wvfs_int = IntegratorFilter(1).(wvfs_wdw)
+    lq80   = NamedTuple(_lq_column_name(:t80, w)    => get_lq(wvfs_int, t80, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
+    lq90   = NamedTuple(_lq_column_name(:t90, w)    => get_lq(wvfs_int, t90, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
+    lqamax = NamedTuple(_lq_column_name(:t_amax, w) => get_lq(wvfs_int, t_amax, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
@@ -529,7 +525,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
         t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
         # Qdrift & LQ
-        qdrift = qdrift, lq_80 = lq_80, lq_90 = lq_90, lq_amax = lq_amax,
+        qdrift = qdrift, lq80..., lq90..., lqamax...,
         # currents
         a_sg = a_sg, a_raw = a_raw, a_mwa = a_mwa, a_sg_fixed..., a_mwa_fixed...,
         # trigger

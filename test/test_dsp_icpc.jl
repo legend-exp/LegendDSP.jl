@@ -91,7 +91,7 @@ function make_fake_config_pd()
         :inTraceCut_std_threshold => 5,
         :sg_flt_degree            => 3,
         :qdrift_int_length => (2.5u"µs":0.1u"µs":5.0u"µs"),
-        :lq_int_length     => (2.5u"µs":0.1u"µs":5.0u"µs"),
+        :lq_windows        => [[2.5, 0.0, 2.5]u"µs", [1.0, 1.0, 1.0]u"µs", [0.5, 1.0, 1.5]u"µs"],
 
         :e_grid_trap => PropDict(
             :rt => PropDict(
@@ -192,7 +192,7 @@ make_fake_config() = DSPConfig(make_fake_config_pd())
                     :tailmean, :tailsigma, :tailslope, :tailoffset,
                     :t0, :t50, :t90, :drift_time, :t_amax,
                     :e_10410, :e_313, :e_101010, :e_trap, :e_cusp, :e_zac,
-                    :qdrift, :lq_80, :lq_90, :lq_amax,
+                    :qdrift, :lq80_250025, :lq90_250025, :lqamax_250025, :lq80_101010, :lqamax_051015,
                     :a_sg, :a_raw, :a_mwa, :t_a_sg, :t_a_mwa, :a_sg_60, :a_sg_100, :a_mwa_48, :a_mwa_288, :a_mwa_576,
                     :n_sat_low, :n_sat_high,
                     :trigger_position, :trigger_multiplicity,
@@ -223,7 +223,7 @@ end
 
     @test result isa TypedTables.Table
     @test length(result) == 3
-    @test all(col -> col in columnnames(result), [:t_amax, :lq_80, :lq_90, :lq_amax])
+    @test all(col -> col in columnnames(result), [:t_amax, :lq80_250025, :lq90_101010, :lqamax_051015])
     @test result.t_amax isa AbstractVector
     @test all(first(data.waveform[1].time) .<= result.t_amax .<= last(data.waveform[1].time))
 end
@@ -292,6 +292,31 @@ end
         pd_missing = make_fake_config_pd(); delete!(pd_missing, k)
         @test_throws Exception DSPConfig(pd_missing)
     end
+end
+
+@testset "configurable LQ columns" begin
+    data   = make_fake_data(3)
+    τ      = 500u"µs"
+    pd = make_fake_config_pd()
+    pd[:lq_windows] = [[2.5, 0.0, 2.5]u"µs", [0.5, 1.0, 1.5]u"µs"]
+    result = dsp_icpc_compressed(data, DSPConfig(pd), τ, PropDict())
+    @test all(c in columnnames(result) for c in (:lq80_250025, :lq80_051015, :lq90_250025, :lq90_051015, :lqamax_250025, :lqamax_051015))
+    @test !(:lq80_101010 in columnnames(result)) && !(:lq_80 in columnnames(result))
+    # the no-gap variant is the previous get_qdrift LQ; the gap variant against the explicit charge differences
+    wvfs = InvCRFilter(τ).(shift_waveform.(data.waveform_windowed, -result.blmean))
+    wvfs_int = IntegratorFilter(1).(wvfs)
+    q(t) = SignalEstimator(PolynomialDNI(3, 100.0u"ns")).(wvfs_int, t)
+    @test ustrip.(result.lq80_250025) ≈ ustrip.(get_qdrift(wvfs, result.t80, 2.5u"µs":0.1u"µs":5.0u"µs"; pol_power = 3, sign_est_length = 100.0u"ns"))
+    t = result.t_amax
+    @test ustrip.(result.lqamax_051015) ≈ ustrip.((q(t .+ 3.0u"µs") .- q(t .+ 1.5u"µs")) .- (q(t .+ 0.5u"µs") .- q(t)))
+    # names and windows that are not triples
+    @test LegendDSP._lq_column_name(:t80, [2.5, 0.0, 2.5]u"µs") == :lq80_250025
+    @test LegendDSP._lq_column_name(:t_amax, [0.5, 1.0, 1.5]u"µs") == :lqamax_051015
+    @test LegendDSP._lq_column_name(:t50, [1000.0, 1000.0, 1000.0]u"ns") == :lq50_101010
+    pd[:lq_windows] = [[2.5, 5.0]u"µs"]
+    @test_throws ArgumentError DSPConfig(pd)
+    pd_missing = make_fake_config_pd(); delete!(pd_missing, :lq_windows)
+    @test_throws Exception DSPConfig(pd_missing)
 end
 
 @testset "MovingWindowMultiFilter passes" begin

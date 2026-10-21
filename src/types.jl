@@ -22,6 +22,7 @@ Configuration parameters for DSP algorithms.
 - `a_mwa_windows::Vector{Quantity{<:T}}`: fixed MWA window lengths stored as `a_mwa_<ns>` columns
 - `a_mwa_passes::Int`: number of alternating moving average passes of the MWA current filter
 - `a_sg_windows::Vector{Quantity{<:T}}`: fixed SG window lengths stored as `a_sg_<ns>` columns
+- `lq_windows::Vector{Vector{Quantity{<:T}}}`: `[early, gap, late]` integration windows of the LQ parameters; one column `lq80_<early><gap><late>` (and `lq90_…`, `lqamax_…`) per window
 
 # Examples
 ```julia
@@ -64,8 +65,8 @@ struct DSPConfig{T <: Real}
     # Integration length for QDrift extraction
     qdrift_int_length::StepRangeLen{<:Quantity{<:T}}
 
-    # Integration length for LQ extraction
-    lq_int_length::StepRangeLen{<:Quantity{<:T}}
+    # (early, gap, late) integration windows of the LQ parameters
+    lq_windows::Vector{<:AbstractVector{<:Quantity{<:T}}}
 
     # rise and flat-top time grid scan ranges for trapezoidal filter
     e_grid_rt_trap::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
