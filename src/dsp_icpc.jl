@@ -24,11 +24,11 @@ The output data is a table with the following columns:
 - `tailslope`: tail slope after PZ correction
 - `tailoffset`: tail offset after PZ correction
 - `t0`: start time of waveform drift
-- `t10`: timepoint of 10% of waveform maximum
-- `t50`: timepoint of 50% of waveform maximum
-- `t80`: timepoint of 80% of waveform maximum
-- `t90`: timepoint of 90% of waveform maximum
-- `t99`: timepoint of 99% of waveform maximum
+- `t10`: timepoint of 10% of the pulse amplitude (maximum of the 101010 trapezoid)
+- `t50`: timepoint of 50% of the pulse amplitude (maximum of the 101010 trapezoid)
+- `t80`: timepoint of 80% of the pulse amplitude (maximum of the 101010 trapezoid)
+- `t90`: timepoint of 90% of the pulse amplitude (maximum of the 101010 trapezoid)
+- `t99`: timepoint of 99% of the pulse amplitude (maximum of the 101010 trapezoid)
 - `t50_current`: timepoint of current rise to 50% of maximum
 - `t_amax`: quadratically interpolated timepoint of maximum current
 - `tail_τ`: tail decay time
@@ -136,12 +136,25 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     # if all waveforms are saturated set threshold to 1.0 to avoid numerical problems
     # replace!(wvf_max, zero(wvf_max[1]) => one(wvf_max[1]))
 
+    # robust energy reconstruction with long, middle and short rise and flat-top times
+    uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
+    e_10410  = maximum.((uflt_10410.(wvfs)).signal)
+
+    uflt_535 = TrapezoidalChargeFilter(5u"µs", 3u"µs")
+    e_535  = maximum.((uflt_535.(wvfs)).signal)
+
+    uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
+    e_313  = maximum.((uflt_313.(wvfs)).signal)
+
+    uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
+    e_101010  = maximum.((uflt_101010.(wvfs)).signal)
+
     # get threshold points in rise
-    t10 = get_threshold(wvfs, wvf_max .* 0.1; mintot=config.kwargs_pars.tx_mintot)
-    t50 = get_threshold(wvfs, wvf_max .* 0.5; mintot=config.kwargs_pars.tx_mintot)
-    t80 = get_threshold(wvfs, wvf_max .* 0.8; mintot=config.kwargs_pars.tx_mintot)
-    t90 = get_threshold(wvfs, wvf_max .* 0.9; mintot=config.kwargs_pars.tx_mintot)
-    t99 = get_threshold(wvfs, wvf_max .* 0.99; mintot=config.kwargs_pars.tx_mintot)
+    t10 = get_threshold(wvfs, e_101010 .* 0.1; mintot=config.kwargs_pars.tx_mintot)
+    t50 = get_threshold(wvfs, e_101010 .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+    t80 = get_threshold(wvfs, e_101010 .* 0.8; mintot=config.kwargs_pars.tx_mintot)
+    t90 = get_threshold(wvfs, e_101010 .* 0.9; mintot=config.kwargs_pars.tx_mintot)
+    t99 = get_threshold(wvfs, e_101010 .* 0.99; mintot=config.kwargs_pars.tx_mintot)
     
     drift_time = uconvert.(u"ns", t90 - t0)
 
@@ -157,19 +170,6 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     lq80   = NamedTuple(_lq_column_name(:t80, w)    => get_lq(wvfs_int, t80, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
     lq90   = NamedTuple(_lq_column_name(:t90, w)    => get_lq(wvfs_int, t90, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
     lqamax = NamedTuple(_lq_column_name(:t_amax, w) => get_lq(wvfs_int, t_amax, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
-
-    # robust energy reconstruction with long, middle and short rise and flat-top times
-    uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
-    e_10410  = maximum.((uflt_10410.(wvfs)).signal)
-
-    uflt_535 = TrapezoidalChargeFilter(5u"µs", 3u"µs")
-    e_535  = maximum.((uflt_535.(wvfs)).signal)
-
-    uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
-    e_313  = maximum.((uflt_313.(wvfs)).signal)
-
-    uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
-    e_101010  = maximum.((uflt_101010.(wvfs)).signal)
 
     # signal estimator for precise energy reconstruction
     signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
@@ -277,11 +277,11 @@ The output data is a table with the following columns:
 - `tailslope`: tail slope after PZ correction
 - `tailoffset`: tail offset after PZ correction
 - `t0`: start time of waveform drift
-- `t10`: timepoint of 10% of waveform maximum
-- `t50`: timepoint of 50% of waveform maximum
-- `t80`: timepoint of 80% of waveform maximum
-- `t90`: timepoint of 90% of waveform maximum
-- `t99`: timepoint of 99% of waveform maximum
+- `t10`: timepoint of 10% of the pulse amplitude (maximum of the 101010 trapezoid)
+- `t50`: timepoint of 50% of the pulse amplitude (maximum of the 101010 trapezoid)
+- `t80`: timepoint of 80% of the pulse amplitude (maximum of the 101010 trapezoid)
+- `t90`: timepoint of 90% of the pulse amplitude (maximum of the 101010 trapezoid)
+- `t99`: timepoint of 99% of the pulse amplitude (maximum of the 101010 trapezoid)
 - `t50_current`: timepoint of current rise to 50% of maximum
 - `t_amax`: quadratically interpolated timepoint of maximum current
 - `tail_τ`: tail decay time
@@ -379,8 +379,6 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     # get wvf extremestats
     wvf_pre_extremestats = extremestats.(wvfs_pre)
     wvf_wdw_extremestats = extremestats.(wvfs_wdw)
-    wvf_max_pre = wvf_pre_extremestats.max
-    wvf_max_wdw = wvf_wdw_extremestats.max
 
     # extract decay times
     tail_stats = tailstats.(wvfs_pre, leftendpoint(tail_window), rightendpoint(tail_window))
@@ -401,13 +399,27 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     # t0 determination
     t0 = get_t0(wvfs_wdw, t0_threshold; flt_pars=config.kwargs_pars.t0_flt_pars, mintot=config.kwargs_pars.t0_mintot)
 
+    # robust energy reconstruction with long, middle and short rise and flat-top times
+    uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
+    e_10410_stats  = extremestats.(uflt_10410.(wvfs_pre))
+    
+    uflt_535 = TrapezoidalChargeFilter(5u"µs", 3u"µs")
+    e_535_stats  = extremestats.(uflt_535.(wvfs_pre))
+    
+    uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
+    e_313_stats  = extremestats.(uflt_313.(wvfs_pre))
+
+    uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
+    e_101010_stats  = extremestats.(uflt_101010.(wvfs_pre))
+
     # get threshold points in rise
-    t10 = get_threshold(wvfs_wdw, wvf_max_wdw .* 0.1; mintot=config.kwargs_pars.tx_mintot)
-    t50 = get_threshold(wvfs_wdw, wvf_max_wdw .* 0.5; mintot=config.kwargs_pars.tx_mintot)
-    t50_pre = get_threshold(wvfs_pre, wvf_max_pre .* 0.5; mintot=config.kwargs_pars.tx_mintot)
-    t80 = get_threshold(wvfs_wdw, wvf_max_wdw .* 0.8; mintot=config.kwargs_pars.tx_mintot)
-    t90 = get_threshold(wvfs_wdw, wvf_max_wdw .* 0.9; mintot=config.kwargs_pars.tx_mintot)
-    t99 = get_threshold(wvfs_wdw, wvf_max_wdw .* 0.99; mintot=config.kwargs_pars.tx_mintot)
+    wvf_amp_wdw = e_101010_stats.max ./ presum_rate_value
+    t10 = get_threshold(wvfs_wdw, wvf_amp_wdw .* 0.1; mintot=config.kwargs_pars.tx_mintot)
+    t50 = get_threshold(wvfs_wdw, wvf_amp_wdw .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+    t50_pre = get_threshold(wvfs_pre, e_101010_stats.max .* 0.5; mintot=config.kwargs_pars.tx_mintot)
+    t80 = get_threshold(wvfs_wdw, wvf_amp_wdw .* 0.8; mintot=config.kwargs_pars.tx_mintot)
+    t90 = get_threshold(wvfs_wdw, wvf_amp_wdw .* 0.9; mintot=config.kwargs_pars.tx_mintot)
+    t99 = get_threshold(wvfs_wdw, wvf_amp_wdw .* 0.99; mintot=config.kwargs_pars.tx_mintot)
     
     drift_time = uconvert.(u"ns", t90 - t0)
 
@@ -423,19 +435,6 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     lq80   = NamedTuple(_lq_column_name(:t80, w)    => get_lq(wvfs_int, t80, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
     lq90   = NamedTuple(_lq_column_name(:t90, w)    => get_lq(wvfs_int, t90, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
     lqamax = NamedTuple(_lq_column_name(:t_amax, w) => get_lq(wvfs_int, t_amax, w...; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length) for w in config.lq_windows)
-
-    # robust energy reconstruction with long, middle and short rise and flat-top times
-    uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
-    e_10410_stats  = extremestats.(uflt_10410.(wvfs_pre))
-    
-    uflt_535 = TrapezoidalChargeFilter(5u"µs", 3u"µs")
-    e_535_stats  = extremestats.(uflt_535.(wvfs_pre))
-    
-    uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
-    e_313_stats  = extremestats.(uflt_313.(wvfs_pre))
-
-    uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
-    e_101010_stats  = extremestats.(uflt_101010.(wvfs_pre))
 
     # signal estimator for precise energy reconstruction
     signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
