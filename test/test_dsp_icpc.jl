@@ -210,6 +210,17 @@ end
     end
 end
 
+@testset "Inverted trapezoid energies" begin
+    # dsp_icpc and dsp_icpc_compressed take the inverted-waveform maxima as minus the minima
+    # of the filtered waveforms; this holds bitwise for the trapezoidal filters
+    times = (0:2047) .* 128.0u"ns"
+    wvfs = ArrayOfRDWaveforms([RDWaveform(times, 100 .* randn(2048) .+ 1000 .* (eachindex(times) .> 600)) for _ in 1:20])
+    wvfs_inv = LegendDSP.multiply_waveform.(wvfs, -1.0)
+    for flt in (TrapezoidalChargeFilter(10u"µs", 4u"µs"), TrapezoidalChargeFilter(3u"µs", 1u"µs"))
+        @test isequal(maximum.(flt.(wvfs_inv).signal), .-extremestats.(flt.(wvfs)).min)
+    end
+end
+
 @testset "dsp_icpc" begin
     data = make_fake_uncompressed_data(3)
     config = make_fake_config()
@@ -222,6 +233,34 @@ end
     @test all(first(data.waveform[1].time) .<= result.t_amax .<= last(data.waveform[1].time))
 end
 
+
+@testset "Float32 processing" begin
+    config = make_fake_config()
+    sample_cols = [:e_max, :e_10410, :e_313, :e_trap_max, :e_cusp_max, :a_sg, :a_mwa, :a_raw, :e_10410_inv]
+    for (dsp, data) in ((dsp_icpc_compressed, make_fake_data(3)), (dsp_icpc, make_fake_uncompressed_data(3)))
+        r64 = dsp(data, config, 500u"µs", PropDict())
+        r32 = dsp(data, config, 500u"µs", PropDict(); wvf_eltype = Float32)
+        @test columnnames(r32) == columnnames(r64)
+        for col in columnnames(r64)
+            T64, T32 = eltype(getproperty(r64, col)), eltype(getproperty(r32, col))
+            @test isconcretetype(T32)
+            @test T32 == T64 || (T64 == Float64 && T32 == Float32)
+        end
+        for col in sample_cols
+            @test eltype(getproperty(r32, col)) == Float32
+        end
+        for col in (:e_max, :e_10410, :e_313, :e_trap, :e_cusp, :e_zac, :qdrift, :a_sg, :a_mwa)
+            @test isapprox(getproperty(r32, col), getproperty(r64, col); rtol = 1e-4)
+        end
+        # LQ is a difference of two integrals, and the inverted energies are close to zero for these
+        # pulses, so both are compared on the scale of the quantities they are derived from
+        @test isapprox(r32.lq_80, r64.lq_80; rtol = 1e-2)
+        @test all(abs.(r32.e_10410_inv .- r64.e_10410_inv) .<= 1e-4 * maximum(r64.e_10410))
+        for col in (:blmean, :blsigma, :tailmean, :tail_τ, :t0, :t50)
+            @test eltype(getproperty(r32, col)) == eltype(getproperty(r64, col))
+        end
+    end
+end
 
 @testset "dsp_mwa_optimization_compressed" begin
     data   = make_fake_data(3)

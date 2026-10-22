@@ -26,15 +26,18 @@ function _extremestats_impl(X::AbstractArray{<:RealQuantity}, Y::AbstractArray{<
     @assert axes(X) == axes(Y)
     @assert firstindex(X) <= first(idxs) <= last(idxs) <= lastindex(X)
     @assert firstindex(Y) <= first(idxs) <= last(idxs) <= lastindex(Y)
-    
-    minv, minidx = findmin(view(Y, idxs))
-    maxv, maxidx = findmax(view(Y, idxs))
-    
+
+    # `minimum`/`maximum` vectorize, `findmin`/`findmax` do not; `findfirst(isequal(...))`
+    # returns the same index as `findmin`/`findmax`: the first extremum, or the first NaN.
+    Y_window = view(Y, idxs)
+    minv, maxv = minimum(Y_window), maximum(Y_window)
+    minidx = idxs[something(findfirst(isequal(minv), Y_window))]
+    maxidx = idxs[something(findfirst(isequal(maxv), Y_window))]
+
     (
         min = minv,
         max = maxv,
-        tmin = X[minidx + first(idxs) - begin],
-        tmax = X[maxidx + first(idxs) - begin]
+        tmin = X[minidx],
+        tmax = X[maxidx]
     )
-
 end

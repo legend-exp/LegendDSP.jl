@@ -1,10 +1,17 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
+    dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc=missing, wvf_eltype::Type{<:AbstractFloat}=Float64) where {Q <: Table, T<:Real}
 
 DSP for ICPC detectors. It needs the decay time `τ` of the detector and the filter parameters `pars_filter` for the optimal filter parameters
 for the Trap, CUSP and ZAC filter. 
+
+The waveforms are processed with element type `wvf_eltype` (`Float64` by default). With `Float32` the waveform
+batches take half the memory, and the filter maxima, currents and waveform extrema are `Float32`. The energies from
+the signal estimator (`e_trap`, `e_cusp`, `e_zac`), Q-drift and LQ are interpolated in time and have the promoted
+type of `wvf_eltype` and the time axis. Baseline, tail and other window statistics and all time parameters keep
+their types.
+
 # Input data
 The input data is a table with the following columns:
 - `waveform`: waveform data
@@ -65,7 +72,7 @@ The output data is a table with the following columns:
 - `n_sat_low_cons`: number of consecutive samples the waveform is saturated at low of FADC range
 - `n_sat_high_cons`: number of consecutive samples the waveform is saturated at high of FADC range
 """
-function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where {Q <: Table, T<:Real}
+function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing, wvf_eltype::Type{W}=Float64) where {Q <: Table, T<:Real, W<:AbstractFloat}
     # get config parameters
     bl_window                = config.bl_window
     t0_threshold             = config.t0_threshold
@@ -110,7 +117,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
-    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
+    wvfs = _with_sample_type(W, shift_waveform.(wvfs, -W.(bl_stats.mean)))
 
     # get QC classifier labels (skip expensive ML classification if no model)
     qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier(wvfs, f_evaluate_qc)) : fill(-1, length(wvfs))
@@ -149,23 +156,28 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     wvfs_deriv = DerivativeFilter(1).(wvfs)
     t_amax = get_wvf_maximum.(wvfs_deriv, first(wvfs_deriv[1].time), last(wvfs_deriv[1].time)).t
 
+    # integrate once for the Q-drift and LQ parameters
+    wvfs_flt_int = IntegratorFilter(1).(wvfs)
+
     # get Q-drift parameter
-    qdrift = get_qdrift(wvfs, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    qdrift = _get_qdrift_impl(wvfs_flt_int, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # get LQ parameters
-    lq_80 = get_qdrift(wvfs, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_90 = get_qdrift(wvfs, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_amax = get_qdrift(wvfs, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_80 = _get_qdrift_impl(wvfs_flt_int, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_90 = _get_qdrift_impl(wvfs_flt_int, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_amax = _get_qdrift_impl(wvfs_flt_int, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
-    e_10410  = maximum.((uflt_10410.(wvfs)).signal)
+    e_10410_stats = extremestats.(uflt_10410.(wvfs))
+    e_10410 = e_10410_stats.max
 
     uflt_535 = TrapezoidalChargeFilter(5u"µs", 3u"µs")
     e_535  = maximum.((uflt_535.(wvfs)).signal)
 
     uflt_313 = TrapezoidalChargeFilter(3u"µs", 1u"µs")
-    e_313  = maximum.((uflt_313.(wvfs)).signal)
+    e_313_stats = extremestats.(uflt_313.(wvfs))
+    e_313 = e_313_stats.max
 
     uflt_101010 = TrapezoidalChargeFilter(10u"µs", 10u"µs")
     e_101010  = maximum.((uflt_101010.(wvfs)).signal)
@@ -215,14 +227,14 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     t50_current = get_threshold(wvfs_sgflt_deriv, thres; mintot=config.kwargs_pars.tx_mintot)
 
+    # inverted waveform maximum for long and short filter (DC tagging): the trapezoidal filters
+    # are linear and floating-point negation is exact, so this is minus the filtered minimum
+    e_10410_max_inv = .-e_10410_stats.min
+    e_313_max_inv = .-e_313_stats.min
+
     # invert waveform for DC tagging
     # wvfs --> wvfs_pz_inv
-    wvfs = multiply_waveform.(wvfs, -1.0)
-
-    # get inverted waveform maximum for long and short filter
-    e_10410_max_inv  = maximum.(uflt_10410.(wvfs).signal)
-
-    e_313_max_inv  = maximum.(uflt_313.(wvfs).signal)
+    wvfs = multiply_waveform.(wvfs, -one(W))
 
     # t0 determination
     t0_inv = get_t0(wvfs, t0_threshold; mintot=config.kwargs_pars.t0_mintot)
@@ -254,10 +266,17 @@ export dsp_icpc
 
 
 """
-    dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
+    dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc=missing, wvf_eltype::Type{<:AbstractFloat}=Float64) where {Q <: Table, T<:Real}
 
 DSP for ICPC detectors. It needs the decay time `τ` of the detector and the filter parameters `pars_filter` for the optimal filter parameters
 for the Trap, CUSP and ZAC filter. 
+
+The waveforms are processed with element type `wvf_eltype` (`Float64` by default). With `Float32` the waveform
+batches take half the memory, and the filter maxima, currents and waveform extrema are `Float32`. The energies from
+the signal estimator (`e_trap`, `e_cusp`, `e_zac`), Q-drift and LQ are interpolated in time and have the promoted
+type of `wvf_eltype` and the time axis. Baseline, tail and other window statistics and all time parameters keep
+their types.
+
 # Input data
 The input data is a table with the following columns:
 - `waveform`: waveform data
@@ -318,7 +337,7 @@ The output data is a table with the following columns:
 - `n_sat_low_cons`: number of consecutive samples the waveform is saturated at low of FADC range
 - `n_sat_high_cons`: number of consecutive samples the waveform is saturated at high of FADC range
 """
-function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where {Q <: Table, T<:Real}
+function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing, wvf_eltype::Type{W}=Float64) where {Q <: Table, T<:Real, W<:AbstractFloat}
     # get config parameters
     bl_window                = config.bl_window
     t0_threshold             = config.t0_threshold
@@ -370,8 +389,8 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     bl_stats = signalstats.(wvfs_pre, leftendpoint(bl_window), rightendpoint(bl_window))
 
     # substract baseline from waveforms
-    wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
-    wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate_value)
+    wvfs_pre = _with_sample_type(W, shift_waveform.(wvfs_pre, -W.(bl_stats.mean)))
+    wvfs_wdw = _with_sample_type(W, shift_waveform.(wvfs_wdw, -W.(bl_stats.mean ./ presum_rate_value)))
 
     # get QC classifier labels (skip expensive ML classification if no model)
     qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)) : fill(-1, length(wvfs_pre))
@@ -415,13 +434,16 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     wvfs_deriv = DerivativeFilter(1).(wvfs_wdw)
     t_amax = get_wvf_maximum.(wvfs_deriv, first(wvfs_deriv[1].time), last(wvfs_deriv[1].time)).t
 
+    # integrate once for the Q-drift and LQ parameters
+    wvfs_flt_int = IntegratorFilter(1).(wvfs_wdw)
+
     # get Q-drift parameter
-    qdrift = get_qdrift(wvfs_wdw, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    qdrift = _get_qdrift_impl(wvfs_flt_int, t0, qdrift_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # get LQ parameters
-    lq_80 = get_qdrift(wvfs_wdw, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_90 = get_qdrift(wvfs_wdw, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
-    lq_amax = get_qdrift(wvfs_wdw, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_80 = _get_qdrift_impl(wvfs_flt_int, t80, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_90 = _get_qdrift_impl(wvfs_flt_int, t90, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
+    lq_amax = _get_qdrift_impl(wvfs_flt_int, t_amax, lq_int_length; pol_power=config.kwargs_pars.int_interpolation_order, sign_est_length=config.kwargs_pars.int_interpolation_length)
 
     # robust energy reconstruction with long, middle and short rise and flat-top times
     uflt_10410 = TrapezoidalChargeFilter(10u"µs", 4u"µs")
@@ -482,15 +504,14 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     t50_current = get_threshold(wvfs_sgflt_deriv, thres; mintot=config.kwargs_pars.tx_mintot)
 
+    # inverted waveform maximum for long and short filter (DC tagging): the trapezoidal filters
+    # are linear and floating-point negation is exact, so this is minus the filtered minimum
+    e_10410_max_inv = .-e_10410_stats.min
+    e_313_max_inv = .-e_313_stats.min
+
     # invert waveform for DC tagging
     # wvfs --> wvfs_pz_inv
-    wvfs_pre = multiply_waveform.(wvfs_pre, -1.0)
-    wvfs_wdw = multiply_waveform.(wvfs_wdw, -1.0)
-
-    # get inverted waveform maximum for long and short filter
-    e_10410_max_inv  = maximum.(uflt_10410.(wvfs_pre).signal)
-
-    e_313_max_inv  = maximum.(uflt_313.(wvfs_pre).signal)
+    wvfs_wdw = multiply_waveform.(wvfs_wdw, -one(W))
 
     # inv t0 determination
     t0_inv = get_t0(wvfs_wdw, t0_threshold; mintot=config.kwargs_pars.t0_mintot)

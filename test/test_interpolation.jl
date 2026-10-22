@@ -72,3 +72,43 @@ using Unitful
     @test max_mixed.t[2] ≈ times_mixed[51]
     @test max_mixed.max[1] == 1.0f0
 end
+
+@testset "get_wvf_maximum index selection" begin
+    times = (0:99) .* 16.0u"ns"
+
+    # Ties: the first maximum in the window is used
+    signal_tie = zeros(100)
+    signal_tie[[19, 20, 21, 29, 30, 31]] .= [0.5, 1.0, 0.25, 0.25, 1.0, 0.5]
+    m_tie = get_wvf_maximum(RDWaveform(times, signal_tie), times[10], times[40])
+    @test m_tie.max == LegendDSP.extrema3points(0.5, 1.0, 0.25)
+    @test times[19] < m_tie.t < times[21]
+
+    # A NaN inside the window propagates to the result
+    signal_nan = copy(signal_tie)
+    signal_nan[25] = NaN
+    @test isnan(get_wvf_maximum(RDWaveform(times, signal_nan), times[10], times[40]).max)
+    @test !isnan(get_wvf_maximum(RDWaveform(times, signal_nan), times[26], times[40]).max)
+
+    # Agreement with an argmax-based search on random signals and random windows
+    function reference_wvf_maximum(X, Y, idxs)
+        maxidx = idxs[argmax(Y[idxs])]
+        if first(idxs) < maxidx < last(idxs)
+            y1, y2, y3 = Y[maxidx-1], Y[maxidx], Y[maxidx+1]
+            δ = (y1 - y3) / (2 * (y1 - 2y2 + y3))
+            (max = LegendDSP.extrema3points(y1, y2, y3), t = X[maxidx] + step(X) * δ)
+        else
+            (max = Y[maxidx], t = X[maxidx] + step(X) * 0.0)
+        end
+    end
+    for _ in 1:200
+        Y = round.(randn(100); digits = 1)   # rounding produces ties
+        i, j = minmax(rand(1:100), rand(1:100))
+        @test get_wvf_maximum(RDWaveform(times, Y), times[i], times[j]) == reference_wvf_maximum(times, Y, i:j)
+    end
+
+    # A view of a longer signal gives the same result as a copy
+    long_signal = randn(120)
+    wvf_view = RDWaveform(times, view(long_signal, 11:110))
+    wvf_copy = RDWaveform(times, long_signal[11:110])
+    @test get_wvf_maximum(wvf_view, times[5], times[95]) == get_wvf_maximum(wvf_copy, times[5], times[95])
+end
