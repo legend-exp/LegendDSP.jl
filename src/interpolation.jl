@@ -30,10 +30,8 @@ function get_wvf_maximum(input::RadiationDetectorDSP.SamplesOrWaveform, start::R
 end
 
 function _get_wvf_maximum_impl(X::AbstractArray{<:RadiationDetectorDSP.RealQuantity}, Y::AbstractArray{<:RadiationDetectorDSP.RealQuantity}, idxs::AbstractUnitRange{<:Integer})
-    @assert axes(X) == axes(Y)
-    @assert firstindex(X) <= first(idxs) <= last(idxs) <= lastindex(X)
-    @assert firstindex(Y) <= first(idxs) <= last(idxs) <= lastindex(Y)
-    
+    axes(X) == axes(Y) || throw(DimensionMismatch("time axis $(axes(X)) and signal $(axes(Y)) differ"))
+    firstindex(X) <= first(idxs) <= last(idxs) <= lastindex(X) || throw(ArgumentError("interval $idxs leaves the record $(axes(X, 1))"))
 
     @inbounds begin
         ind_max = argmax(Y[idxs])
