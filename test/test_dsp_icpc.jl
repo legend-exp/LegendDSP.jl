@@ -57,7 +57,7 @@ function make_fake_uncompressed_data(N=3)
     )
 end
 
-function make_fake_config()
+function make_fake_config_pd()
     pd = PropDict(
 
         :enc_pickoff_trap => 40.0u"µs",
@@ -91,7 +91,7 @@ function make_fake_config()
         :inTraceCut_std_threshold => 5,
         :sg_flt_degree            => 3,
         :qdrift_int_length => (2.5u"µs":0.1u"µs":5.0u"µs"),
-        :lq_int_length     => (2.5u"µs":0.1u"µs":5.0u"µs"),
+        :lq_windows        => [[2.5, 0.0, 2.5]u"µs", [1.0, 1.0, 1.0]u"µs", [0.5, 1.0, 1.5]u"µs"],
 
         :e_grid_trap => PropDict(
             :rt => PropDict(
@@ -144,6 +144,10 @@ function make_fake_config()
             :step  => 16.0u"ns",
         ),
 
+        :a_mwa_windows   => [48.0u"ns", 288.0u"ns", 576.0u"ns"],
+        :a_mwa_passes    => 3,
+        :a_sg_windows    => [60.0u"ns", 100.0u"ns"],
+
         :flt_defaults => PropDict(
             :sg   => 100.0u"ns",
             :mwa  => 96.0u"ns",
@@ -165,8 +169,10 @@ function make_fake_config()
         ),
     )
 
-    return DSPConfig(pd)
+    return pd
 end
+
+make_fake_config() = DSPConfig(make_fake_config_pd())
 
 
 @testset "dsp_icpc_compressed" begin
@@ -186,8 +192,8 @@ end
                     :tailmean, :tailsigma, :tailslope, :tailoffset,
                     :t0, :t50, :t90, :drift_time, :t_amax,
                     :e_10410, :e_313, :e_101010, :e_trap, :e_cusp, :e_zac,
-                    :qdrift, :lq_80, :lq_90, :lq_amax,
-                    :a_sg, :a_raw, :a_mwa, :a_mwa_48, :a_mwa_288, :a_mwa_576,
+                    :qdrift, :lq80_250025, :lq90_250025, :lqamax_250025, :lq80_101010, :lqamax_051015,
+                    :a_sg, :a_raw, :a_mwa, :t_a_sg, :t_a_mwa, :a_sg_60, :a_sg_100, :a_mwa_48, :a_mwa_288, :a_mwa_576,
                     :n_sat_low, :n_sat_high,
                     :trigger_position, :trigger_multiplicity,
                     :e_10410_inv, :e_313_inv, :t0_inv]
@@ -217,7 +223,7 @@ end
 
     @test result isa TypedTables.Table
     @test length(result) == 3
-    @test all(col -> col in columnnames(result), [:t_amax, :lq_80, :lq_90, :lq_amax])
+    @test all(col -> col in columnnames(result), [:t_amax, :lq80_250025, :lq90_101010, :lqamax_051015])
     @test result.t_amax isa AbstractVector
     @test all(first(data.waveform[1].time) .<= result.t_amax .<= last(data.waveform[1].time))
 end
@@ -254,4 +260,77 @@ end
     @test all(all.(isfinite, result.aoe))
     @test all(isfinite, ustrip.(result.energy))
     @test all(result.qc_label .== -1)
+end
+
+
+@testset "configurable current columns" begin
+    data   = make_fake_data(3)
+    τ      = 500u"µs"
+    pars_filter = PropDict()
+
+    # window lists from the config define the stored columns
+    pd = make_fake_config_pd()
+    pd[:a_mwa_windows] = [16.0u"ns", 64.0u"ns", 96.0u"ns"]
+    pd[:a_sg_windows]  = [100.0u"ns"]
+    result = dsp_icpc_compressed(data, DSPConfig(pd), τ, pars_filter)
+    cols = columnnames(result)
+    @test all(c in cols for c in (:a_sg, :a_raw, :a_mwa, :t_a_sg, :t_a_mwa, :a_sg_100, :a_mwa_16, :a_mwa_64, :a_mwa_96))
+    @test !(:a_mwa_48 in cols) && !(:a_sg_60 in cols)
+    # the columns equal the explicit filter chain on the baseline-subtracted, PZ-corrected waveform
+    wvfs = InvCRFilter(τ).(shift_waveform.(data.waveform_windowed, -result.blmean)); wvfs_deriv = DerivativeFilter(1).(wvfs)
+    ref(ws) = get_wvf_maximum.(ws, 43.0u"µs", 62.0u"µs")
+    @test get_a(wvfs_deriv, 43.0u"µs" .. 62.0u"µs").max == ref(wvfs_deriv).max && get_a(wvfs_deriv, 43.0u"µs" .. 62.0u"µs").t == ref(wvfs_deriv).t
+    @test ustrip.(result.a_raw) ≈ ustrip.(ref(wvfs_deriv).max)
+    @test ustrip.(result.a_mwa_16) ≈ ustrip.(result.a_raw)                                           # one-sample window = plain derivative
+    @test ustrip.(result.a_mwa_96) ≈ ustrip.(ref(MovingWindowMultiFilter(96u"ns").(wvfs_deriv)).max)
+    @test ustrip.(result.a_sg_100) ≈ ustrip.(ref(SavitzkyGolayFilter(100u"ns", 3, 1).(wvfs)).max)
+    @test ustrip.(result.a_sg) ≈ ustrip.(result.a_sg_100) && ustrip.(result.a_mwa) ≈ ustrip.(result.a_mwa_96)   # flt_defaults: sg 100 ns, mwa 96 ns
+    @test all(43.0u"µs" .<= result.t_a_sg .<= 62.0u"µs") && all(43.0u"µs" .<= result.t_a_mwa .<= 62.0u"µs")
+
+    # the window keys are required metadata, no defaults in the code
+    for k in (:a_mwa_windows, :a_mwa_passes, :a_sg_windows)
+        pd_missing = make_fake_config_pd(); delete!(pd_missing, k)
+        @test_throws Exception DSPConfig(pd_missing)
+    end
+end
+
+@testset "configurable LQ columns" begin
+    data   = make_fake_data(3)
+    τ      = 500u"µs"
+    pd = make_fake_config_pd()
+    pd[:lq_windows] = [[2.5, 0.0, 2.5]u"µs", [0.5, 1.0, 1.5]u"µs"]
+    result = dsp_icpc_compressed(data, DSPConfig(pd), τ, PropDict())
+    @test all(c in columnnames(result) for c in (:lq80_250025, :lq80_051015, :lq90_250025, :lq90_051015, :lqamax_250025, :lqamax_051015))
+    @test !(:lq80_101010 in columnnames(result)) && !(:lq_80 in columnnames(result))
+    # the no-gap variant is the previous get_qdrift LQ; the gap variant against the explicit charge differences
+    wvfs = InvCRFilter(τ).(shift_waveform.(data.waveform_windowed, -result.blmean))
+    wvfs_int = IntegratorFilter(1).(wvfs)
+    q(t) = SignalEstimator(PolynomialDNI(3, 100.0u"ns")).(wvfs_int, t)
+    @test ustrip.(result.lq80_250025) ≈ ustrip.(get_qdrift(wvfs, result.t80, 2.5u"µs":0.1u"µs":5.0u"µs"; pol_power = 3, sign_est_length = 100.0u"ns"))
+    t = result.t_amax
+    @test ustrip.(result.lqamax_051015) ≈ ustrip.((q(t .+ 3.0u"µs") .- q(t .+ 1.5u"µs")) .- (q(t .+ 0.5u"µs") .- q(t)))
+    # names and windows that are not triples
+    @test LegendDSP._lq_column_name(:t80, [2.5, 0.0, 2.5]u"µs") == :lq80_250025
+    @test LegendDSP._lq_column_name(:t_amax, [0.5, 1.0, 1.5]u"µs") == :lqamax_051015
+    @test LegendDSP._lq_column_name(:t50, [1000.0, 1000.0, 1000.0]u"ns") == :lq50_101010
+    pd[:lq_windows] = [[2.5, 5.0]u"µs"]
+    @test_throws ArgumentError DSPConfig(pd)
+    pd_missing = make_fake_config_pd(); delete!(pd_missing, :lq_windows)
+    @test_throws Exception DSPConfig(pd_missing)
+end
+
+@testset "MovingWindowMultiFilter passes" begin
+    t = (0:199) .* 16.0u"ns"
+    x = vcat(zeros(80), range(0.0, 1.0; length = 40), ones(80)) .+ 0.05 .* sin.(0.7 .* (1:200))
+    wf = RDWaveform(t, x)
+    left(v, l) = (y = similar(v); y[1] = v[1]; for i in 2:length(v); y[i] = y[i - 1] + (v[i] - v[max(i - l, 1)]) / l; end; y)
+    right(v, l) = reverse(left(reverse(v), l))
+    l = 4
+    # default = three passes left, right, left (the previous fixed implementation)
+    @test MovingWindowMultiFilter(64u"ns")(wf).signal ≈ left(right(left(x, l), l), l)
+    @test MovingWindowMultiFilter(64u"ns"; passes = 2)(wf).signal ≈ right(left(x, l), l)
+    @test MovingWindowMultiFilter(64u"ns"; passes = 1)(wf).signal ≈ left(x, l)
+    # one sample window = identity, whatever the passes
+    @test MovingWindowMultiFilter(16u"ns")(wf).signal ≈ x
+    @test_throws ArgumentError MovingWindowMultiFilter(64u"ns"; passes = 0)(wf)
 end

@@ -5,7 +5,8 @@ import RadiationDetectorDSP: AbstractConvFilterInstance,
 """
     struct MovingWindowMultiFilter <: AbstractRadFIRFilter
 
-apply left and right moving average windows to signal.
+apply `passes` moving average windows of size `length` to the signal, alternating forward and backward in time
+(left, right, left for the default three passes; an even number of passes is symmetric).
 Working example:
 ```julia
 using RadiationDetectorSignals
@@ -15,12 +16,14 @@ signal = rand(100)
 t = range(0u"ms", 20u"ms", 100)
 
 wf = RDWaveform(t, signal)
-flt = MovingWindowMultiFilter(1u"ms")
+flt = MovingWindowMultiFilter(1u"ms")              # three passes left, right, left
+flt = MovingWindowMultiFilter(1u"ms"; passes = 2)  # left, right
 wf_new = flt(wf)
 ```
 Constructors:
 
 * ```$(FUNCTIONNAME)(; fields...)```
+* ```$(FUNCTIONNAME)(length; passes = 3)```
 
 Fields:
 
@@ -29,13 +32,18 @@ $(TYPEDFIELDS)
 Base.@kwdef struct MovingWindowMultiFilter{T <: RadiationDetectorDSP.RealQuantity} <: AbstractRadFIRFilter
     "size of the moving average window"
     length::T
+    "number of moving average passes, alternating forward and backward in time"
+    passes::Int = 3
 end
+
+MovingWindowMultiFilter(length::RadiationDetectorDSP.RealQuantity; passes::Int = 3) = MovingWindowMultiFilter(length, passes)
 
 export MovingWindowMultiFilter
 
 struct MovingWindowMultiFilterInstance{T} <: AbstractRadSigFilterInstance{LinearFiltering}
     length::Int
     n_input::Int
+    passes::Int
 end
 
 """
@@ -77,8 +85,9 @@ end
 function RadiationDetectorDSP.fltinstance(flt::MovingWindowMultiFilter, 
     si::SamplingInfo{T}) where {T}
 
+    flt.passes >= 1 || throw(ArgumentError("MovingWindowMultiFilter needs at least one pass, got $(flt.passes)"))
     length = round(Int, uconvert(NoUnits, flt.length / step(si.axis)))
-    MovingWindowMultiFilterInstance{T}(length, length + _smpllen(si) - 1)
+    MovingWindowMultiFilterInstance{T}(length, length + _smpllen(si) - 1, flt.passes)
 end
 
 RadiationDetectorDSP._filterlen(fi::MovingWindowFilterInstance) = fi.length
@@ -120,10 +129,15 @@ function rdfilt!(y::AbstractVector, fi::MovingWindowMultiFilterInstance{T}, x::A
 
     _fi = MovingWindowFilterInstance{T}(fi.length, fi.n_input)
     _y = similar(y)
-    yr = @view y[end:-1:begin]          # reversed view of y
-    _yr = @view _y[end:-1:begin]        # reversed view of _y
-    rdfilt!(_y, _fi, x)
-    rdfilt!(yr, _fi, _yr)
-    copyto!(_y, y)
-    rdfilt!(y, _fi, _y)    
+    # the passes alternate between the two buffers; the first one is chosen such that the last pass writes y
+    src, dst = x, isodd(fi.passes) ? y : _y
+    for p in 1:fi.passes
+        if isodd(p)
+            rdfilt!(dst, _fi, src)                                          # odd passes forward in time
+        else
+            rdfilt!((@view dst[end:-1:begin]), _fi, (@view src[end:-1:begin]))  # even passes backward in time
+        end
+        src, dst = dst, (dst === y ? _y : y)
+    end
+    y
 end

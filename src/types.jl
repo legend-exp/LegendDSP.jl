@@ -17,7 +17,12 @@ Configuration parameters for DSP algorithms.
 - `e_grid_ft_zac::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for ZAC filter
 - `e_grid_rt_cusp::StepRangeLen{Quantity{<:T}}`: rise time grid scan range for CUSP filter
 - `e_grid_ft_cusp::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for CUSP filter
-- `a_grid_rt_sg::StepRangeLen{Quantity{<:T}}`: window length grid scan range for SG filter
+- `a_grid_wl_sg::StepRangeLen{Quantity{<:T}}`: window length grid scan range for SG filter
+- `a_grid_wl_mwa::StepRangeLen{Quantity{<:T}}`: window length grid scan range for MWA filter
+- `a_mwa_windows::Vector{Quantity{<:T}}`: fixed MWA window lengths stored as `a_mwa_<ns>` columns
+- `a_mwa_passes::Int`: number of alternating moving average passes of the MWA current filter
+- `a_sg_windows::Vector{Quantity{<:T}}`: fixed SG window lengths stored as `a_sg_<ns>` columns
+- `lq_windows::Vector{Vector{Quantity{<:T}}}`: `[early, gap, late]` integration windows of the LQ parameters; one column `lq80_<early><gap><late>` (and `lq90_…`, `lqamax_…`) per window
 
 # Examples
 ```julia
@@ -60,8 +65,8 @@ struct DSPConfig{T <: Real}
     # Integration length for QDrift extraction
     qdrift_int_length::StepRangeLen{<:Quantity{<:T}}
 
-    # Integration length for LQ extraction
-    lq_int_length::StepRangeLen{<:Quantity{<:T}}
+    # (early, gap, late) integration windows of the LQ parameters
+    lq_windows::Vector{<:AbstractVector{<:Quantity{<:T}}}
 
     # rise and flat-top time grid scan ranges for trapezoidal filter
     e_grid_rt_trap::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
@@ -80,6 +85,13 @@ struct DSPConfig{T <: Real}
 
     # window length grid scan range for MWA filter in current determination
     a_grid_wl_mwa::StepRangeLen{Quantity{<:T}, Base.TwicePrecision{Quantity{<:T}}, Base.TwicePrecision{Quantity{<:T}}, Int64}
+
+    # fixed MWA window lengths stored as `a_mwa_<ns>` columns and number of alternating moving average passes
+    a_mwa_windows::Vector{<:Quantity{<:T}}
+    a_mwa_passes::Int
+
+    # fixed SG window lengths stored as `a_sg_<ns>` columns
+    a_sg_windows::Vector{<:Quantity{<:T}}
 
     # default filter parameter
     default_flt_param::PropDict
