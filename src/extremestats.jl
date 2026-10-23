@@ -1,12 +1,16 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    extremestats(signal::AbstractSamples, start::Real, stop::Real)
-    extremestats(signal::RDWaveform, start::RealQuantity, stop::RealQuantity)
+    extremestats(signal::SamplesOrWaveform, start::RealQuantity, stop::RealQuantity)
+    extremestats(signal::RDWaveform)
+    extremestats(signal::AbstractSamples)
 
-Get the extrema and their time positions on `signal` in the interval (`start`,`stop`).
-Output is in the format `(min = .., max = .., tmin = .., tmax = ..)`
+Minimum, maximum and their time positions of `signal` between `start` and `stop`.
 
+The interval includes the samples nearest to `start` and `stop`. The methods without an interval use the whole signal.
+
+# Returns
+- named tuple `(min, max, tmin, tmax)`
 """
 function extremestats end
 export extremestats

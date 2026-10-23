@@ -1,17 +1,19 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, config::PropDict)
+    dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, sg_window_length::Unitful.Time, config::PropDict)
 
-This function calculates the baseline of the waveforms and the baseline of the waveforms with the sign flipped.
-The function is used to calculate the thresholds for the SiPMs.
+Samples of the Savitzky-Golay derivative and of its integral for all waveforms, as input for choosing the SiPM trigger thresholds.
+
+The waveforms are decoded, converted to `Float64` and filtered with a `SavitzkyGolayFilter(sg_window_length, config.sg_flt_degree, 1)`. The derivative is then integrated with `IntegratorFilter(gain=1)`.
 
 # Arguments
-- `wvfs::ArrayOfRDWaveforms`: Array of RDWaveforms
-- `config::PropDict`: Configuration parameters
+- `wvfs`: SiPM waveforms
+- `sg_window_length`: window length of the Savitzky-Golay filter
+- `config`: `PropDict` with the entry `sg_flt_degree`
 
 # Returns
-- `Table`: Table with the baseline of the waveforms and the baseline of the waveforms with the sign flipped
+- table with the columns `bsl_deriv` (samples of the derivative), `bsl` (samples of the integrated derivative) and `bsl_flipped` (`-bsl`). Each column contains the samples of all waveforms in one vector.
 """
 function dsp_sg_sipm_thresholds_compressed(wvfs::ArrayOfRDWaveforms, sg_window_length::Unitful.Time{<:Real}, config::PropDict)
     # get dsp meta parameters
@@ -50,16 +52,20 @@ export dsp_sg_sipm_thresholds_compressed
 
 """
     dsp_sg_sipm_optimization_compressed(wvfs::ArrayOfRDWaveforms, dsp_config::PropDict, optimization_config::PropDict)
+    dsp_sg_sipm_optimization_compressed(n_max_wvfs::Int, wvfs::ArrayOfRDWaveforms, dsp_config::PropDict, optimization_config::PropDict)
 
-This function calculates DSP grid to find the optimal thresholds for the SiPMs.
+Savitzky-Golay filter window lengths scanned for the SiPM trigger threshold and the maxima of the triggers found with it.
+
+For each window length in `optimization_config.e_grid_wl` the waveforms are filtered with a `SavitzkyGolayFilter(wl, dsp_config.sg_flt_degree, 1)`. The threshold is `dsp_config.n_σ_threshold` times [`thresholdstats`](@ref) of the samples of the first `optimization_config.threshold.n_wvfs` waveforms (all waveforms if there are fewer) between `optimization_config.threshold.min_cut` and `optimization_config.threshold.max_cut`. The triggers are found with `IntersectMaximum(dsp_config.min_tot_intersect, dsp_config.max_tot_intersect)`.
 
 # Arguments
-- `wvfs::ArrayOfRDWaveforms`: Array of RDWaveforms
-- `dsp_config::PropDict`: Configuration parameters for the DSP
-- `optimization_config::PropDict`: Configuration parameters for the optimization
+- `n_max_wvfs`: number of waveforms per chunk. The method with this argument is meant to process the waveforms in chunks of this size, to merge the maxima of the chunks per window length and to take the smallest threshold of the chunks. It throws a `MethodError`.
+- `wvfs`: SiPM waveforms
+- `dsp_config`: `PropDict` with the entries `min_tot_intersect`, `max_tot_intersect`, `n_σ_threshold` and `sg_flt_degree`
+- `optimization_config`: `PropDict` with the entries `e_grid_wl` and `threshold` (with `min_cut`, `max_cut` and `n_wvfs`)
 
 # Returns
-- `Table`: Table with the optimal thresholds for the SiPMs
+- table with one row per window length and the columns `trig_max_grid` (maxima of all triggers of all waveforms) and `thresholds_grid` (threshold)
 """
 function dsp_sg_sipm_optimization_compressed end
 export dsp_sg_sipm_optimization_compressed

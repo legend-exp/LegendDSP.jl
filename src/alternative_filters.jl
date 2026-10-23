@@ -2,6 +2,17 @@
     struct WeightedSavitzkyGolayFilter{T<:RealQuantity} <: AbstractRadFIRFilter
 
 A [Weighted-Savitzky-Golay filter](https://doi.org/10.1021/acsmeasuresciau.1c00054).
+
+A polynomial of degree `degree` is fitted by weighted least squares in a window of total length `length` around each sample, and the fitted value is the output. The weights fall off with the distance from the window center according to `weightType`:
+
+- `0`: constant weights, which gives the ordinary Savitzky-Golay filter
+- `1`: Gaussian-like weights
+- `2`: Hann weights, `cos²`
+- `3`: squared Hann weights, `cos⁴`
+- `4`: cubed Hann weights, `cos⁶`
+
+The window is adapted near the boundaries of the signal. Other values of `weightType` raise an `AssertionError`, as do a signal shorter than the window and a degree larger than twice the half-window in samples.
+
 Working example:
 ```julia
 using RadiationDetectorSignals
@@ -20,10 +31,10 @@ flt = WeightedSavitzkyGolayFilter(length=1u"μs", degree=3, weightType=2)
 wf_new = flt(wf)
 ```
 
-
 Constructors:
 
 * ```$(FUNCTIONNAME)(; fields...)```
+* ```$(FUNCTIONNAME)(length, degree, weightType)```
 
 Fields:
 
@@ -232,10 +243,13 @@ end
 
 
 """
-    struct ModifiedSincFilter{T<:RealQuantity} <: AbstractRadFIRFilter{}
+    struct ModifiedSincFilter{T<:RealQuantity} <: AbstractRadFIRFilter
 
-A [Modified-Sinc filter](https://doi.org/10.1021/acsmeasuresciau.1c00054)
-Working example
+A [Modified-Sinc filter](https://doi.org/10.1021/acsmeasuresciau.1c00054).
+
+The kernel is a windowed sinc function with a half-width of `m`; the degree `d` determines the number of extrema in the kernel. At the signal boundaries the signal is extended by weighted linear extrapolation. `d` has to be even and in 2:10, and `m` has to be at least `d/2 + 2` samples; otherwise an `AssertionError` is thrown.
+
+Working example:
 ```julia
 using RadiationDetectorSignals
 using Unitful
@@ -256,6 +270,7 @@ wf_new = flt(wf)
 Constructors:
 
 * ```$(FUNCTIONNAME)(; fields...)```
+* ```$(FUNCTIONNAME)(d, m)```
 
 Fields:
 
@@ -362,10 +377,11 @@ const MS_COEFFS = Dict(
 end
 
 """
-    makeFitWeights(d::Int, m::Int) where {U}
+    makeFitWeights(d::Integer, m::Int)
 
-return the weights for the linear fit user for linear extrapolation at 
-at the right boundary.
+Weights of the linear fits that extend the signal beyond its boundaries in [`ModifiedSincFilter`](@ref).
+
+The weights are the square root of a cosine that falls to zero at a distance determined by the half-width `m` of the kernel and the degree `d` of the filter.
 """
 function makeFitWeights(d::U, m::Int) where {U <: Integer}
     firstZero = (m+1)/(1.5 + d/2)
@@ -405,8 +421,9 @@ end
 """
     weighted_linear_reg(w::AbstractVector, y::AbstractVector)
 
-Do a weighted linear regression of the data `y` with weights `w` and return
-the offset and slope. its assumed that x is a range from 1 to `length(y)`
+Weighted linear regression of the data `y` with weights `w`. The abscissa is assumed to be `0, 1, …, length(y) - 1`.
+
+Returns the tuple `(offset, slope)`. The slope is zero if it evaluates to `NaN`, for example for a single point, and `NaN` if the sum of the weights is not positive.
 """
 function weighted_linear_reg(w::AbstractVector, y::AbstractVector)
     T = RadiationDetectorDSP._floattype(promote_type(eltype(w), eltype(y)))
@@ -441,10 +458,12 @@ function weighted_linear_reg(w::AbstractVector, y::AbstractVector)
 end
 
 """
-
     struct WhittakerHendersonFilter <: AbstractRadSigFilter{LinearFiltering}
 
 A [Whittaker-Henderson filter](https://doi.org/10.1021/acsmeasuresciau.1c00054).
+
+The output `y` for an input `x` minimizes `sum((x - y).^2) + λ * sum(Δᵖy.^2)`, where `Δᵖy` are the finite differences of order `p` of `y`. It solves `(I + λ DᵀD) y = x` with the difference matrix `D` by a banded Cholesky decomposition. A larger `λ` gives a smoother output.
+
 Working example:
 ```julia
 using RadiationDetectorSignals
@@ -461,6 +480,15 @@ flt = WhittakerHendersonFilter(p=3, λ=4)
 
 # apply filter to signal
 wf_new = flt(wf)
+```
+
+Constructors:
+
+* ```$(FUNCTIONNAME)(; fields...)```
+
+Fields:
+
+$(TYPEDFIELDS)
 """
 Base.@kwdef struct WhittakerHendersonFilter <: AbstractRadSigFilter{LinearFiltering}
     "highest differentiation degree"
@@ -502,9 +530,9 @@ _coeffs(p) = map(n -> binomial(p, n)*(-1)^(n + p), 0:p)
 """
     makeIPlusLambdaDprimeD(λ::T, p::Int, N::Int) where {T}
 
-build the centro symmetric banded matrix which needs to be inverted 
-later: I + λ*D'D
-D is the finite difference matrix of order `p`.
+Banded storage of the centrosymmetric `N × N` matrix `I + λ DᵀD`, where `D` is the finite-difference matrix of order `p`.
+
+Row `d + 1` of the returned `(p + 1) × N` matrix holds the `d`-th subdiagonal. Throws an `AssertionError` unless `N > p`.
 """
 function makeIPlusLambdaDprimeD(λ::T, p::Int, N::Int) where {T}
     @assert N > p "Order ($p) must be less than number of points ($N)"
@@ -529,12 +557,11 @@ function makeIPlusLambdaDprimeD(λ::T, p::Int, N::Int) where {T}
 end
 
 """
-
     choleskyL!(b::AbstractMatrix{T})
 
-inplace cholesky decomposition of a banded symmetric matrix, where 
-b[1, i] contains the diagonal elements, b[2, i] the elements of the 
-first subdiagonal and so on.
+In-place Cholesky decomposition of a banded symmetric matrix in the storage of [`makeIPlusLambdaDprimeD`](@ref): `b[1, i]` holds the diagonal, `b[2, i]` the first subdiagonal, and so on.
+
+Throws an `AssertionError` if the matrix is not positive definite.
 """
 function choleskyL!(b::AbstractMatrix{T}) where {T}
     dmax = size(b, 1) - 1
@@ -559,9 +586,7 @@ end
 """
     banded_cholesky_solve!(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
 
-solve the linear equation `AA'x = y` and store the result in `x`, where
-`A` is the cholesky decomposition of a banded centro symmetric matrix.
-`A[1, i]` is the diagonal, `A[2, i]` is the first subdiagonal and so on.
+Solve `A Aᵀ x = y` and store the result in `x`, where `A` is the lower Cholesky factor of a banded symmetric matrix in the storage of [`choleskyL!`](@ref): `A[1, i]` is the diagonal, `A[2, i]` the first subdiagonal, and so on.
 """
 function banded_cholesky_solve!(x::AbstractVector, A::AbstractMatrix, y::AbstractVector)
     n = size(A, 2)

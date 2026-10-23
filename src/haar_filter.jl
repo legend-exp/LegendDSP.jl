@@ -1,5 +1,21 @@
 # This file is a part of RadiationDetectorDSP.jl, licensed under the MIT License (MIT).
 
+"""
+    struct HaarAveragingFilter <: AbstractRadSigFilter{LinearFiltering}
+
+Haar averaging filter: sums each pair of adjacent samples, scales the sum by 1/√2 and keeps every `down_sampling_rate`-th result.
+
+With `down_sampling_rate = 2` the pairs do not overlap, which corresponds to the approximation step of a discrete Haar wavelet transform. The output has `ceil(n / down_sampling_rate)` samples for `n` input samples and the output time axis consists of every `down_sampling_rate`-th element of the input time axis. Sample indices beyond the signal are clamped to the first and last sample.
+
+Constructor:
+
+* `HaarAveragingFilter(down_sampling_rate::Int)`
+
+Fields:
+
+* `down_sampling_rate`: distance in samples between the starts of successive pairs
+* `length`: number of averaged samples, always 2
+"""
 struct HaarAveragingFilter <: AbstractRadSigFilter{LinearFiltering}
     down_sampling_rate::Int
     length::Int
