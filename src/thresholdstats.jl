@@ -1,12 +1,11 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    thresholdstats(signal::AbstractSamples, min::Real, min::Real)
-    thresholdstats(signal::RDWaveform, min::RealQuantity, max::RealQuantity)
+    thresholdstats(signal::SamplesOrWaveform, min::RealQuantity=-Inf, max::RealQuantity=Inf)
 
-Get the standard deviation of all samples in a `signal` that are within 
-the lower bound `min` and the upper bound `max`.
-If no values for `min` or `max` are passed, the respective bound is ignored.
+Standard deviation of all samples of `signal` that lie between the lower bound `min` and the upper bound `max`.
+
+The default bounds include all samples. The result is `NaN` if no sample lies between the bounds.
 """
 function thresholdstats end
 export thresholdstats
@@ -42,13 +41,11 @@ end
 
 
 """
-    thresholdstats_mad(signal::AbstractSamples, min::Real, max::Real)
-    thresholdstats_mad(signal::RDWaveform, min::RealQuantity, max::RealQuantity)
+    thresholdstats_mad(signal::SamplesOrWaveform, min::RealQuantity=-Inf, max::RealQuantity=Inf)
 
-Get a robust threshold estimate using the Median Absolute Deviation (MAD)
-of all samples in a `signal` that are within the lower bound `min` and
-the upper bound `max`. The MAD is scaled by 1.4826 to be consistent with
-the standard deviation for normally distributed data.
+Median absolute deviation (MAD) of all samples of `signal` that lie between the lower bound `min` and the upper bound `max`, scaled by 1.4826 to estimate the standard deviation of normally distributed data.
+
+The default bounds include all samples. The result is zero if no sample lies between the bounds.
 """
 function thresholdstats_mad end
 export thresholdstats_mad

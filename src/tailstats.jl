@@ -1,10 +1,15 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    tailstats(signal::AbstractSamples, start::Real, stop::Real)
-    tailstats(signal::RDWaveform, start::RealQuantity, stop::RealQuantity)
+    tailstats(signal::SamplesOrWaveform, start::RealQuantity, stop::RealQuantity)
 
-Get statistics on the logarhithmic of the tail of a `signal` in the interval (`start`,`stop`) by fitting a linear function.
+Fit a straight line to the logarithm of `signal` between `start` and `stop`, as a model of an exponential decay.
+
+The interval includes the samples nearest to `start` and `stop`.
+
+# Returns
+- named tuple `(mean, sigma, τ)`: mean and standard deviation of the logarithm of the samples in the interval, and the decay time `τ`, the negative inverse slope of the fit.
+  If any sample in the interval is not positive, all three values are zero.
 """
 function tailstats end
 export tailstats

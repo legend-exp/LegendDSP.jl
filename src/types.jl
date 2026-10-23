@@ -3,28 +3,35 @@
 """
     DSPConfig{T <: Real}
 
-Configuration parameters for DSP algorithms.
+Settings of the HPGe DSP chains and filter-parameter scans.
+
+All time-valued fields are `Unitful` quantities. Create an instance from DSP metadata with `DSPConfig(pd::PropDict)`.
 
 # Fields
-- `enc_pickoff::Quantity{<:T}`: pick-off time for ENC noise calculations
-- `bl_window::ClosedInterval{Quantity{<:T}}`: fit window for basline extraction
-- `tail_window::ClosedInterval{Quantity{<:T}}`: fit window for decay time extraction
-- `inTraceCut_std_threshold::T`: in-trace pile-up rejector threshold in standard deviations
-- `t0_threshold::T`: ADC threshold for t0 determination
-- `e_grid_rt_trap::StepRangeLen{Quantity{<:T}}`: rise time grid scan range for trapezoidal filter
-- `e_grid_ft_trap::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for trapezoidal filter
-- `e_grid_rt_zac::StepRangeLen{Quantity{<:T}}`: rise time grid scan range for ZAC filter
-- `e_grid_ft_zac::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for ZAC filter
-- `e_grid_rt_cusp::StepRangeLen{Quantity{<:T}}`: rise time grid scan range for CUSP filter
-- `e_grid_ft_cusp::StepRangeLen{Quantity{<:T}}`: flat-top time grid scan range for CUSP filter
-- `a_grid_wl_sg::StepRangeLen{Quantity{<:T}}`: window length grid scan range for SG filter
-- `a_grid_wl_mwa::StepRangeLen{Quantity{<:T}}`: window length grid scan range for MWA filter
-- `a_mwa_windows::Vector{Quantity{<:T}}`: fixed MWA window lengths stored as `a_mwa_<ns>` columns
-- `a_mwa_passes::Int`: number of alternating moving average passes of the MWA current filter
-- `a_sg_windows::Vector{Quantity{<:T}}`: fixed SG window lengths stored as `a_sg_<ns>` columns
-- `lq_windows::Vector{Vector{Quantity{<:T}}}`: `[early, gap, late]` integration windows of the LQ parameters; one column `lq80_<early><gap><late>` (and `lq90_…`, `lqamax_…`) per window
+- `enc_pickoff_trap`, `enc_pickoff_zac`, `enc_pickoff_cusp`: time at which the trapezoidal, ZAC and CUSP filtered waveforms are evaluated in the rise-time scans [`dsp_trap_rt_optimization`](@ref), [`dsp_zac_rt_optimization`](@ref) and [`dsp_cusp_rt_optimization`](@ref)
+- `flt_length_cusp`, `flt_length_zac`: total length of the CUSP and ZAC filters
+- `t0_threshold`: threshold in units of the filtered signal for the t0 determination of [`get_t0`](@ref)
+- `inTraceCut_std_threshold`: threshold of the in-trace pile-up search in standard deviations of the baseline
+- `sg_flt_degree`: polynomial degree of the Savitzky-Golay filters that determine the current
+- `bl_window`: time window for the baseline fit
+- `tail_window`: time window for the decay-time fit and the tail statistics after pole-zero correction
+- `current_window`: time window in which the maximum of the current is searched
+- `qdrift_int_length`: `StepRangeLen` whose first and last elements are the two integration times of [`get_qdrift`](@ref)
+- `lq_windows`: vector of `[early, gap, late]` window lengths of the LQ parameters, see [`get_lq`](@ref)
+- `e_grid_rt_trap`, `e_grid_ft_trap`: rise-time and flat-top-time scan ranges of the trapezoidal filter
+- `e_grid_rt_zac`, `e_grid_ft_zac`: rise-time and flat-top-time scan ranges of the ZAC filter
+- `e_grid_rt_cusp`, `e_grid_ft_cusp`: rise-time and flat-top-time scan ranges of the CUSP filter
+- `a_grid_wl_sg`: window-length scan range of the Savitzky-Golay current filter
+- `a_grid_wl_mwa`: window-length scan range of the moving-window-average current filter
+- `a_mwa_windows`: fixed window lengths of the moving-window-average current filter; each gives a column `a_mwa_<ns>`
+- `a_mwa_passes`: number of alternating passes of the moving-window-average current filter, see [`MovingWindowMultiFilter`](@ref)
+- `a_sg_windows`: fixed window lengths of the Savitzky-Golay current filter; each gives a column `a_sg_<ns>`
+- `default_flt_param`: `PropDict` with the default filter parameters: `rt` and `ft` for `trap`, `cusp` and `zac`, and the window length for `sg` and `mwa`
+- `kwargs_pars`: `PropDict` with further parameters: `fc_bit_depth`, `t0_flt_pars`, `t0_mintot`, `tx_mintot`, `intrace_mintot`, `int_interpolation_order`, `int_interpolation_length`, `sig_interpolation_order` and `sig_interpolation_length`
+- `auxpz1_window`, `auxpz2_window`: time windows of the auxiliary pole-zero statistics `auxpz1_*` and `auxpz2_*` of [`dsp_icpc_compressed`](@ref)
 
 # Examples
+`LegendDataManagement` is not a dependency of `LegendDSP` and is only used here to read the metadata.
 ```julia
 using LegendDSP
 using LegendDataManagement
@@ -106,6 +113,19 @@ end
 export DSPConfig
 
 
+"""
+    DSPConfig(pd::PropDict)
+
+Create a `DSPConfig{Float64}` from DSP metadata.
+
+`pd` needs one entry per field of [`DSPConfig`](@ref), with these differences:
+
+- `bl_window`, `tail_window`, `current_window`, `auxpz1_window` and `auxpz2_window` are given as `(min, max)` entries;
+- `e_grid_trap`, `e_grid_zac` and `e_grid_cusp` each contain `rt` and `ft` entries with `start`, `step` and `stop`; `a_grid_wl_sg` and `a_grid_wl_mwa` have the same three entries. `a_grid_wl_mwa` is optional and defaults to `a_grid_wl_sg`;
+- `qdrift_int_length` holds a start and a stop time; the resulting range has a step of 0.1 in the unit of the start time;
+- `default_flt_param` is read from the entry `flt_defaults`;
+- every element of `lq_windows` must have exactly three entries, otherwise an `ArgumentError` is thrown.
+"""
 function DSPConfig(pd::PropDict)
     _create_dsp_config(pd)
 end

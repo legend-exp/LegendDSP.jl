@@ -1,30 +1,24 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
-""" 
-    dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
+"""
+    dsp_puls(data::Table, config::DSPConfig)
 
-DSP function for pulser processing.
-# Input data
-The input data is a table with the following columns:
-- `waveform`: waveform data
-- `baseline`: baseline data
-- `timestamp`: timestamp data
-- `eventnumber`: event number data
-- `daqenergy`: energy data
+DSP chain for pulser waveforms. Returns a table with one row per waveform.
 
-# Output data
-The output data is a table with the following columns:
-- `blmean`: baseline mean
-- `blsigma`: baseline sigma
-- `blslope`: baseline slope
-- `bloffset`: baseline offset
-- `t50`: timepoint of 50% of waveform maximum
-- `e_max`: maximum of waveform
-- `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
-- `blfc`: baseline from FADC
-- `timestamp`: timestamp
-- `eventID_fadc`: event number from FADC
-- `e_fc`: energy from FADC
+The baseline is the fit in `config.bl_window`. It is subtracted before the maximum, the time at 50% of the maximum and the energy of a trapezoidal filter are determined.
+
+# Input columns
+`waveform`, `baseline`, `timestamp`, `eventnumber`, `daqenergy`
+
+# Output columns
+- `blmean`, `blsigma`, `blslope`, `bloffset`: baseline statistics in `config.bl_window`
+- `t50`: time at which the waveform reaches 50% of its maximum, in µs
+- `e_max`: maximum of the baseline-subtracted waveform
+- `e_10410`: maximum after a `TrapezoidalChargeFilter(10u"µs", 4u"µs")` (rise time 10 µs, flat-top time 4 µs)
+- `blfc`: baseline from the FADC
+- `timestamp`: timestamp from the FADC
+- `eventID_fadc`: event number from the FADC
+- `e_fc`: energy from the FADC
 """
 function dsp_puls(data::Q, config::DSPConfig) where {Q <: Table}
     # get config parameters
@@ -70,31 +64,10 @@ export dsp_puls
 
 
 
-""" 
-    dsp_puls_compressed(data::Q, config::DSPConfig) where {Q <: Table}
+"""
+    dsp_puls_compressed(data::Table, config::DSPConfig)
 
-DSP function for pulser processing.
-# Input data
-The input data is a table with the following columns:
-- `waveform`: waveform data
-- `baseline`: baseline data
-- `timestamp`: timestamp data
-- `eventnumber`: event number data
-- `daqenergy`: energy data
-
-# Output data
-The output data is a table with the following columns:
-- `blmean`: baseline mean
-- `blsigma`: baseline sigma
-- `blslope`: baseline slope
-- `bloffset`: baseline offset
-- `t50`: timepoint of 50% of waveform maximum
-- `e_max`: maximum of waveform
-- `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
-- `blfc`: baseline from FADC
-- `timestamp`: timestamp
-- `eventID_fadc`: event number from FADC
-- `e_fc`: energy from FADC
+Variant of [`dsp_puls`](@ref) for compressed data. The waveform is read from the column `waveform_presummed` instead of `waveform`; the other input and all output columns are the same.
 """
 function dsp_puls_compressed(data::Q, config::DSPConfig) where {Q <: Table}
     # get config parameters
@@ -138,14 +111,22 @@ export dsp_puls_compressed
 
 
 """
-    dsp_aux(data::Q, config::DSPConfig) where {Q <: Table}
+    dsp_aux(data::Table, config::DSPConfig)
 
-DSP for auxiliary channels whose waveforms are spikes. For each waveform, the
-baseline-subtracted maximum sample and its time are returned as `e_max` and
-`t_max`.
+DSP chain for auxiliary channels whose waveforms are spikes. Returns a table with one row per waveform.
 
-The `config` argument is accepted for consistency with the other detector DSP
-entry points but is not used.
+The `config` argument is accepted for consistency with the other DSP chains but is not used.
+
+# Input columns
+`waveform`, `baseline`, `timestamp`, `eventnumber`, `daqenergy`
+
+# Output columns
+- `e_max`: maximum sample of the waveform minus the FADC baseline
+- `t_max`: time of the maximum sample
+- `blfc`: baseline from the FADC
+- `timestamp`: timestamp from the FADC
+- `eventID_fadc`: event number from the FADC
+- `e_fc`: energy from the FADC
 """
 function dsp_aux(data::Q, ::DSPConfig) where {Q <: Table}
     data = decode_data(data)
@@ -166,11 +147,9 @@ export dsp_aux
 
 
 """
-    dsp_aux_compressed(data::Q, config::DSPConfig) where {Q <: Table}
+    dsp_aux_compressed(data::Table, config::DSPConfig)
 
-Compressed-data variant of [`dsp_aux`](@ref). The presummed waveforms are
-decoded before their maxima and maximum times are determined. Each baseline is
-scaled by the corresponding presumming rate before it is subtracted.
+Variant of [`dsp_aux`](@ref) for compressed data. The waveform is read from the column `waveform_presummed`, and `e_max` is the maximum sample minus the FADC baseline multiplied by `presum_rate`. The input also needs the column `presum_rate`; the output columns are the same.
 """
 function dsp_aux_compressed(data::Q, ::DSPConfig) where {Q <: Table}
     data = decode_data(data)
