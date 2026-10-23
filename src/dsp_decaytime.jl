@@ -1,12 +1,15 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_decay_times(wvfs::ArrayOfRDWaveforms, bl_window::ClosedInterval{<:Unitful.Time{<:T}}, tail_window::ClosedInterval{<:Unitful.Time{<:T}})
+    dsp_decay_times(wvfs::ArrayOfRDWaveforms, bl_window::ClosedInterval{<:Unitful.Time}, tail_window::ClosedInterval{<:Unitful.Time})
     dsp_decay_times(wvfs::ArrayOfRDWaveforms, config::DSPConfig)
-    
-Get statistics on the logarhithmic of the tail of the `wvfs` in the interval `tail_window`.
+
+Decay time of the exponential tail of each waveform in `wvfs`.
+
+Each waveform is decoded, the mean in `bl_window` is subtracted, and [`tailstats`](@ref) fits a straight line to the logarithm of the samples in `tail_window`. The second method uses `config.bl_window` and `config.tail_window`.
+
 # Returns
-- `τ`: decay time in µs
+- vector of decay times τ with unit µs, one entry per waveform. The entry is zero if a sample in `tail_window` is not positive.
 """
 function dsp_decay_times(wvfs::ArrayOfRDWaveforms, bl_window::ClosedInterval{<:Unitful.Time{<:T}}, tail_window::ClosedInterval{<:Unitful.Time{<:T}}) where T <: Real
     # get waveform data

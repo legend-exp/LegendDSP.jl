@@ -1,10 +1,15 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    tailstats(signal::AbstractSamples, start::Real, stop::Real)
-    tailstats(signal::RDWaveform, start::RealQuantity, stop::RealQuantity)
+    saturation(signal::SamplesOrWaveform, low::RealQuantity, high::RealQuantity)
+    saturation(signal::SamplesOrWaveform, start::RealQuantity, stop::RealQuantity, low::RealQuantity, high::RealQuantity)
 
-Get statistics on the logarhithmic of the tail of a `signal` in the interval (`start`,`stop`).
+Count the samples of `signal` that are equal to the lower saturation value `low` or the upper saturation value `high`.
+
+The first method uses the whole signal, the second the interval between `start` and `stop`, including the samples nearest to both.
+
+# Returns
+- named tuple `(low, high, max_cons_low, max_cons_high)`: number of samples equal to `low` and `high`, and the length of the longest run of consecutive samples equal to `low` and to `high`.
 """
 function saturation end
 export saturation

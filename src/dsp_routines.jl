@@ -1,10 +1,18 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    get_t0(wvfs_pz::ArrayOfRDWaveforms, t0_threshold::T) where T<:Real
+    get_t0(wvfs_pz::ArrayOfRDWaveforms, t0_threshold::Real; flt_pars::Vector{<:Unitful.Time}=[40u"ns", 100u"ns", 2000u"ns"], mintot::Unitful.Time=1500u"ns")
 
-Get t0 for each waveform in `wvfs_pz` by using a fast asymetric trapezoidal filter and
-a fixed threshold at `t0_threshold`. The filter is truncated to the range 0µs to 60µs where the Ge trigger is expected in FlashCam.
+Start time t0 of the charge rise of each pole-zero-corrected waveform in `wvfs_pz`.
+
+Each waveform is filtered with an asymmetric `TrapezoidalChargeFilter(flt_pars...)`. t0 is the interpolated time at which the filtered waveform first rises above `t0_threshold` and stays above it for at least `mintot`.
+
+# Keywords
+- `flt_pars`: pre-rise averaging time, gap time and post-rise averaging time of the trapezoidal filter
+- `mintot`: minimum time over threshold
+
+# Returns
+- vector of t0 with unit µs, one entry per waveform. The entry is zero if the threshold is not crossed.
 """
 function get_t0(wvfs_pz::ArrayOfRDWaveforms, t0_threshold::T; flt_pars::Vector{<:Unitful.Time{<:Real}}=[40u"ns", 100u"ns", 2000u"ns"], mintot::Unitful.Time{<:Real}=1500u"ns") where T<:Real
     # t0 determination
@@ -26,9 +34,14 @@ end
 export get_t0
 
 """
-    get_threshold(wvfs::ArrayOfRDWaveforms, threshold::Array{T}) where T<:Real
+    get_threshold(wvfs::ArrayOfRDWaveforms, threshold::Union{Array{T}, T}; mintot::Unitful.Time=1000.0u"ns") where T<:Real
 
-Get threshold for each waveform in `wvfs` by intersecting the waveform with a `threshold` per waveform or globally.
+Time at which each waveform in `wvfs` first rises above `threshold`.
+
+`threshold` is either one value for all waveforms or an array with one value per waveform. The time is interpolated linearly, and the waveform has to stay above the threshold for at least `mintot`.
+
+# Returns
+- vector of times with unit µs, one entry per waveform. The entry is zero if the threshold is not crossed.
 """
 function get_threshold(wvfs::ArrayOfRDWaveforms, threshold::Union{Array{T}, T}; mintot::Unitful.Time=1000.0u"ns") where T<:Real
     # create intersect filter
@@ -53,9 +66,19 @@ export get_a
 
 
 """
-    get_qdrift(wvfs::ArrayOfRDWaveforms, t_start::Array{Unitful.Time{T}}, Δt::UnitRange{Unitful.Time{T}}; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
+    get_qdrift(wvfs::ArrayOfRDWaveforms, t_start::Array{<:Unitful.Time}, Δt::StepRangeLen{<:Unitful.Time}; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
 
-Get the Q-drift parameter for each waveform in `wvfs` by integrating the waveform with gain = 1 and using a polynomial signal estimator of order `pol_power` and length `sign_est_length` to estimate the signal.
+Q-drift parameter of each waveform in `wvfs`: the difference of two charges collected after `t_start`.
+
+The waveforms are integrated with `IntegratorFilter(1)`. Values of the integrated waveform at `t_start`, `t_start + first(Δt)` and `t_start + last(Δt)` are determined with a `SignalEstimator(PolynomialDNI(pol_power, sign_est_length))`. The result is the charge collected in `[t_start + first(Δt), t_start + last(Δt)]` minus the charge collected in `[t_start, t_start + first(Δt)]`.
+
+# Arguments
+- `t_start`: start time for each waveform, typically t0
+- `Δt`: only the first and the last element are used, as the two integration times relative to `t_start`
+
+# Keywords
+- `pol_power`: polynomial degree of the signal estimator
+- `sign_est_length`: length of the signal estimator window
 """
 function get_qdrift(wvfs::ArrayOfRDWaveforms, t_start::Array{<:Unitful.Time{<:Real}}, Δt::StepRangeLen{<:Unitful.Time{<:Real}}; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
     # Integrate waveforms with gain = 1
@@ -76,9 +99,11 @@ export get_qdrift
 """
     get_lq(wvfs_int::ArrayOfRDWaveforms, t_start::Array{<:Unitful.Time}, early::Unitful.Time, gap::Unitful.Time, late::Unitful.Time; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
 
-LQ parameter: charge in the late window `[t_start + early + gap, t_start + early + gap + late]` minus the charge in the
-early window `[t_start, t_start + early]`. `wvfs_int` are the integrated waveforms (`IntegratorFilter(1).(wvfs)`), so the
-integration is done once for all LQ variants. `get_qdrift(wvfs, t, Δt)` equals `get_lq(wvfs_int, t, first(Δt), 0, last(Δt) - first(Δt))`.
+LQ parameter: charge in the late window `[t_start + early + gap, t_start + early + gap + late]` minus the charge in the early window `[t_start, t_start + early]`.
+
+`wvfs_int` are the integrated waveforms (`IntegratorFilter(1).(wvfs)`), so that the integration is done once for all LQ variants. The charges are determined with a `SignalEstimator(PolynomialDNI(pol_power, sign_est_length))`.
+
+`get_qdrift(wvfs, t, Δt)` equals `get_lq(wvfs_int, t, first(Δt), 0u"µs", last(Δt) - first(Δt))`.
 """
 function get_lq(wvfs_int::ArrayOfRDWaveforms, t_start::Array{<:Unitful.Time{<:Real}}, early::Unitful.Time, gap::Unitful.Time, late::Unitful.Time; pol_power::Int=3, sign_est_length::Unitful.Time=100u"ns")
     signal_estimator = SignalEstimator(PolynomialDNI(pol_power, sign_est_length))
@@ -88,13 +113,14 @@ end
 export get_lq
 
 """
-    get_triggers_reversed((wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
+    get_triggers_reversed(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time}; mintot::Unitful.Time=100.0u"ns")
 
-Determine trigger positions and multiplicities from waveforms.
+Trigger positions and multiplicities found on the time-reversed waveforms.
 
-The triggers are identified as intersections of the reversed signal with a threshold defined as a multiple of the baseline standard deviation within `bl_window`.
+The threshold of each waveform is `sigma_threshold` times its standard deviation in the baseline window, computed on the time axis of the first waveform from `first(wvfs[1].time) + leftendpoint(bl_window)` to `rightendpoint(bl_window)`. A threshold of zero is replaced by one. The waveforms are reversed in time and searched with `Intersect(mintot)`.
 
-Returns a named tuple containing the trigger positions (`intersect`) and the corresponding trigger multiplicities (`n`).
+# Returns
+- named tuple `(intersect, n)`: `intersect` holds the time of the first crossing in the original time axis, `n` the number of crossings of at least `mintot`.
 """
 function get_triggers_reversed(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
     flt_intersec_inTrace = Intersect(mintot = mintot)
@@ -109,13 +135,14 @@ end
 export get_triggers_reversed
 
 """
-    get_triggers(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
+    get_triggers(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time}; mintot::Unitful.Time=100.0u"ns")
 
-Determine trigger positions and multiplicities from waveforms.
+Trigger positions and multiplicities found on the waveforms.
 
-The triggers are identified as intersections of the signal with a threshold defined as a multiple of the baseline standard deviation within `bl_window`.
+The threshold of each waveform is `sigma_threshold` times its standard deviation in the baseline window, computed on the time axis of the first waveform from `first(wvfs[1].time) + leftendpoint(bl_window)` to `rightendpoint(bl_window)`. A threshold of zero is replaced by one. The waveforms are searched with `Intersect(mintot)`.
 
-Returns a named tuple containing the trigger positions (`intersect`) and the corresponding trigger multiplicities (`n`).
+# Returns
+- named tuple `(intersect, n)`: `intersect` holds the time of the first crossing (zero if there is none), `n` the number of crossings of at least `mintot`.
 """
 function get_triggers(wvfs::ArrayOfRDWaveforms, sigma_threshold::Real, bl_window::ClosedInterval{<:Unitful.Time{<:Real}}; mintot::Unitful.Time=100.0u"ns")
     flt_intersec_inTrace = Intersect(mintot = mintot)

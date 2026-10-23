@@ -1,8 +1,20 @@
 [deps]
+ArraysOfArrays = "65a8f2f4-9b39-5baf-92e2-a9cc46fdf018"
+CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+IntervalSets = "8197267c-284f-5f27-9208-e0e47529a953"
+LegendDSP = "e6d7a502-be5c-5049-a927-8d60e566555d"
+LegendMakie = "ce9a434a-d062-4f11-9371-3059ddb1c48a"
+Literate = "98b081ad-f1c9-55d3-8b20-4c87d4299306"
 Markdown = "d6f4376e-aef5-505a-96c1-9c027394607a"
+PropDicts = "4dc08600-4268-439e-8673-d706fafbb426"
 RadiationDetectorDSP = "afd6e06f-c550-5763-af36-7391d39e46ec"
 RadiationDetectorSignals = "bf2c0563-65cf-5db2-a620-ceb7de82658c"
+StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
+StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
+TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [compat]
 Documenter = "1"
