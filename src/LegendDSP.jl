@@ -22,7 +22,6 @@ using Unitful
 using PropDicts
 using Tables
 using TypedTables
-using LIBSVM
 using LegendDataTypes
 
 import Adapt
@@ -50,7 +49,6 @@ include("dsp_pmts.jl")
 include("dsp_routines.jl")
 include("dsp_aux.jl")
 include("haar_filter.jl")
-include("ml.jl")
 include("dsp_ml_routines.jl")
 include("multi_intersect.jl")
 include("moving_window_multi.jl")
