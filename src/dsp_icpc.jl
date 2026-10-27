@@ -1,7 +1,7 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
+    dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc = missing) where {Q <: Table, T<:Real}
 
 DSP for ICPC detectors. It needs the decay time `τ` of the detector and the filter parameters `pars_filter` for the optimal filter parameters
 for the Trap, CUSP and ZAC filter. 
@@ -19,6 +19,8 @@ The output data is a table with the following columns:
 - `blsigma`: baseline sigma
 - `blslope`: baseline slope
 - `bloffset`: baseline offset
+- `qc_label`: ML QC label from the evaluator `f_evaluate_qc`, `-1` without one, followed by the further
+  columns of the evaluator, e.g. the probability of every QC category (see [`get_qc_columns`](@ref))
 - `tailmean`: tail mean after PZ correction
 - `tailsigma`: tail sigma after PZ correction
 - `tailslope`: tail slope after PZ correction
@@ -112,8 +114,8 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     # substract baseline from waveforms
     wvfs = shift_waveform.(wvfs, -bl_stats.mean)
 
-    # get QC classifier labels (skip expensive ML classification if no model)
-    qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier(wvfs, f_evaluate_qc)) : fill(-1, length(wvfs))
+    # ML QC columns: `qc_label` and the further columns of the evaluator, `qc_label = -1` without one
+    qc_columns = get_qc_columns(wvfs, f_evaluate_qc)
     
     # get wvf maximum
     wvf_max = maximum.(wvfs.signal)
@@ -231,7 +233,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     # output Table 
     return TypedTables.Table(; blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, 
     tailmean = pz_stats.mean, tailsigma = pz_stats.sigma, tailslope = pz_stats.slope, tailoffset = pz_stats.offset,
-    qc_label = qc_labels,
+    qc_columns...,
     t0 = t0, t10 = t10, t50 = t50, t80 = t80, t90 = t90, t99 = t99,
     t50_current = t50_current, t_amax = t_amax, t_a_sg = t_a_sg, t_a_mwa = t_a_mwa,
     drift_time = drift_time,
@@ -254,7 +256,7 @@ export dsp_icpc
 
 
 """
-    dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
+    dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc = missing) where {Q <: Table, T<:Real}
 
 DSP for ICPC detectors. It needs the decay time `τ` of the detector and the filter parameters `pars_filter` for the optimal filter parameters
 for the Trap, CUSP and ZAC filter. 
@@ -272,6 +274,8 @@ The output data is a table with the following columns:
 - `blsigma`: baseline sigma
 - `blslope`: baseline slope
 - `bloffset`: baseline offset
+- `qc_label`: ML QC label from the evaluator `f_evaluate_qc`, `-1` without one, followed by the further
+  columns of the evaluator, e.g. the probability of every QC category (see [`get_qc_columns`](@ref))
 - `tailmean`: tail mean after PZ correction
 - `tailsigma`: tail sigma after PZ correction
 - `tailslope`: tail slope after PZ correction
@@ -373,8 +377,8 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     wvfs_pre = shift_waveform.(wvfs_pre, -bl_stats.mean)
     wvfs_wdw = shift_waveform.(wvfs_wdw, -bl_stats.mean ./ presum_rate_value)
 
-    # get QC classifier labels (skip expensive ML classification if no model)
-    qc_labels = !ismissing(f_evaluate_qc) ? Int.(get_qc_classifier_compressed(wvfs_pre, f_evaluate_qc)) : fill(-1, length(wvfs_pre))
+    # ML QC columns: `qc_label` and the further columns of the evaluator, `qc_label = -1` without one
+    qc_columns = get_qc_columns(wvfs_pre, f_evaluate_qc)
     
     # get wvf extremestats
     wvf_pre_extremestats = extremestats.(wvfs_pre)
@@ -503,8 +507,8 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         t_sat_lo=t_sat_lo, t_sat_hi=t_sat_hi,
         # baseline 
         blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope, bloffset = bl_stats.offset, bl_slope_sigma = bl_stats.slope_residual_sigma,
-        # ML QC label
-        qc_label = qc_labels,
+        # ML QC label and probabilities
+        qc_columns...,
         # waveform extrema and timepoints
         e_max = wvf_pre_extremestats.max, e_min = wvf_wdw_extremestats.min, t_max = wvf_pre_extremestats.tmax, t_min = wvf_wdw_extremestats.tmin,
         e_max_pre = wvf_pre_extremestats.max, e_min_pre = wvf_pre_extremestats.min, t_max_pre = wvf_pre_extremestats.tmax, t_min_pre = wvf_pre_extremestats.tmin,

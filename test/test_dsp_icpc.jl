@@ -216,6 +216,40 @@ make_fake_config() = DSPConfig(make_fake_config_pd())
     end
 end
 
+@testset "ML QC evaluator columns" begin
+    data   = make_fake_data(3)
+    config = make_fake_config()
+    τ      = 500u"µs"
+    seen = Ref{Any}(nothing)
+    f_evaluate_qc = function (wvfs)
+        seen[] = wvfs
+        n = length(wvfs)
+        return (qc_label = fill(13.0, n), qc_prob_0 = fill(0.25, n), qc_prob_13 = fill(0.75, n))
+    end
+
+    result = dsp_icpc_compressed(data, config, τ, PropDict(); f_evaluate_qc)
+    cols = columnnames(result)
+    @test (:qc_label, :qc_prob_0, :qc_prob_13) ⊆ cols
+    @test findfirst(==(:qc_prob_0), cols) == findfirst(==(:qc_label), cols) + 1
+    @test result.qc_label == fill(13, 3) && eltype(result.qc_label) == Int
+    @test result.qc_prob_13 == fill(0.75, 3)
+    # the evaluator receives the presummed waveforms with the baseline mean removed
+    @test length(seen[]) == 3
+    @test seen[].signal[1] == shift_waveform(data.waveform_presummed[1], -result.blmean[1]).signal
+
+    @test get_qc_columns(data.waveform_presummed, missing) == (qc_label = fill(-1, 3),)
+    @test get_qc_classifier(data.waveform_presummed, f_evaluate_qc) == fill(13, 3)
+    @test_throws "returned no qc_label" get_qc_columns(data.waveform_presummed, w -> (qc_prob_0 = zeros(3),))
+    @test_throws "NamedTuple" get_qc_columns(data.waveform_presummed, w -> zeros(Int, 3))
+    @test_throws DimensionMismatch get_qc_columns(data.waveform_presummed, w -> (qc_label = zeros(Int, 2),))
+
+    pars_filter = PropDict(:trap => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"))
+    result_mwa = dsp_mwa_optimization_compressed(data.waveform_windowed, data.waveform_presummed, config, τ, pars_filter;
+        presum_rate = 1, f_evaluate_qc)
+    @test result_mwa.qc_label == fill(13, 3)
+    @test !(:qc_prob_0 in columnnames(result_mwa))
+end
+
 @testset "dsp_icpc" begin
     data = make_fake_uncompressed_data(3)
     config = make_fake_config()
