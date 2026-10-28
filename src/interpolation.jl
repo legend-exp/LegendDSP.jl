@@ -1,21 +1,23 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    extrema3points(y1::T,y2::T,y3::T)::T where {T<:AbstractFloat}
+    extrema3points(y1::T, y2::T, y3::T)::T where {T<:RealQuantity}
 
-Calculate the extrema of a parabola defined by three points.
+Value at the extremum of the parabola through three equidistant samples `y1`, `y2` and `y3`.
 """
 function extrema3points(y1::T,y2::T,y3::T)::T where {T<:RadiationDetectorDSP.RealQuantity}
     y1 - (y3-4y2+3y1)^2/(8*(y3-2y2+y1))
 end
 
 """
-    get_wvf_maximum(signal::AbstractSamples, start::Real, stop::Real)
-    get_wvf_maximum(signal::RDWaveform, start::RealQuantity, stop::RealQuantity)
+    get_wvf_maximum(signal::SamplesOrWaveform, start::RealQuantity, stop::RealQuantity)
 
-Get the maximum of a `signal` and its time in the interval (`start`, `stop`) by quadratic interpolation.
+Maximum of `signal` between `start` and `stop` and its time, from a parabola through the maximum sample and its two neighbors.
 
-Returns `(max = ..., t = ...)`.
+The interval includes the samples nearest to `start` and `stop`. If the maximum sample is the first or last sample of the interval, its value and time are returned without interpolation.
+
+# Returns
+- named tuple `(max, t)`
 """
 function get_wvf_maximum end
 export get_wvf_maximum

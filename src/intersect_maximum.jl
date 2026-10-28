@@ -1,11 +1,32 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    struct IntersectMaximum <: Function
-Finds the intersects of a Y with a threshold and picking the maximum in a given time window.
+    struct IntersectMaximum{T<:RealQuantity} <: Function
+
+Find the up-crossings of a signal through a threshold and the maximum following each of them.
+
+An up-crossing is a position where the signal rises to the threshold and stays at or above it for at least `mintot`. A crossing at the first sample is not counted. The crossing time is interpolated linearly.
+
+Call an instance as
+
+    (f::IntersectMaximum)(signal::SamplesOrWaveform, threshold::RealQuantity)
+
+It returns a named tuple. All entries except `multiplicity` are vectors with one element per up-crossing:
+- `x`: crossing time
+- `x_high`: time at which the signal falls below the threshold again (interpolated linearly), or the last time of the signal if it does not
+- `x_tot`: `x_high - x`
+- `max`: maximum of the signal within `maxtot` after the crossing, interpolated by a parabola if it is an interior sample
+- `multiplicity`: number of up-crossings
+
+`mintot` and `maxtot` are converted to numbers of samples using the step of the time axis. For a time axis with a unit they need to be quantities of the same dimension; the defaults of 4 and 100 are plain numbers.
+
 Constructors:
+
 * ```$(FUNCTIONNAME)(; fields...)```
+* ```$(FUNCTIONNAME)(mintot, maxtot)```
+
 Fields:
+
 $(TYPEDFIELDS)
 """
 Base.@kwdef struct IntersectMaximum{T<:RadiationDetectorDSP.RealQuantity} <: Function

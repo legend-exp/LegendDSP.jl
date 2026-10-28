@@ -1,10 +1,17 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Union{Function, Missing})
+    dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time, f_evaluate_qc::Function)
+    dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time, f_evaluate_qc::Missing)
 
-Get QC DSP for filter parameter optimization for a given waveform set.
-If f_evaluate_qc is missing, skips expensive ML classification and sets qc_label=-1.
+Energy, baseline and quality-cut label of each waveform with the default trapezoidal filter, used to select waveforms for the filter-parameter scans.
+
+The waveforms are decoded, the baseline mean in `config.bl_window` is subtracted, and the waveforms are pole-zero corrected with the decay time `τ`. The energy is the value of a `TrapezoidalChargeFilter(rt, ft)` with `rt` and `ft` of `config.default_flt_param.trap`, determined by a signal estimator at `t50 + rt + ft/2`. `t50` is the time at which the waveform reaches 50% of its maximum.
+
+The label is `get_qc_classifier(wvfs, f_evaluate_qc)` of the baseline-subtracted and pole-zero-corrected waveforms. With `missing` as `f_evaluate_qc` no classification is done and `qc_label` is -1.
+
+# Returns
+- table with the columns `energy`, `blmean`, `blslope`, `t50` (in µs) and `qc_label`, one row per waveform
 """
 function dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
     _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier, f_evaluate_qc))
@@ -15,10 +22,10 @@ end
 export dsp_qc_flt_optimization
 
 """
-    dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Union{Function, Missing})
+    dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time, f_evaluate_qc::Function)
+    dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time, f_evaluate_qc::Missing)
 
-Get QC DSP for filter parameter optimization for a given waveform set.
-If f_evaluate_qc is missing, skips expensive ML classification and sets qc_label=-1.
+Variant of [`dsp_qc_flt_optimization`](@ref) for presummed waveforms. The label is determined with [`get_qc_classifier_compressed`](@ref); everything else is the same.
 """
 function dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function) 
     _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier_compressed, f_evaluate_qc))
@@ -68,9 +75,17 @@ function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfi
 end
 
 """
-    dsp_qdrift_flt_optimization(wvfs::ArrayOfRDWaveforms, blmean::Vector{<:Real}, config::DSPConfig, τ::Unitful.Time{<:Real})
+    dsp_qdrift_flt_optimization(wvfs::ArrayOfRDWaveforms, blmean::Vector{<:Real}, config::DSPConfig, τ::Unitful.Time)
 
-Get QDrift filter parameter optimization for a given waveform set.
+Q-drift parameter of each waveform, for scanning the integration times `config.qdrift_int_length`.
+
+The waveforms are decoded, `blmean` is subtracted, and the waveforms are pole-zero corrected with `τ`. Then t0 is determined with [`get_t0`](@ref) and the parameter with [`get_qdrift`](@ref).
+
+# Arguments
+- `blmean`: baseline mean of each waveform
+
+# Returns
+- vector of Q-drift values, one per waveform
 """
 function dsp_qdrift_flt_optimization(wvfs::ArrayOfRDWaveforms, blmean::Vector{<:Real}, config::DSPConfig, τ::Unitful.Time{<:Real})
     # get config parameters
@@ -98,12 +113,17 @@ export dsp_qdrift_flt_optimization
 
 
 """
-    dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
+    dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}; ft::Quantity{T}=2.0u"µs") where T<:Real
 
-Get ENC noise grid values for given trap grid rise times.
+Values of the trapezoidal filter at a fixed time for each rise time in `config.e_grid_rt_trap`, for estimating the equivalent noise charge (ENC).
+
+The waveforms are decoded, the baseline mean in `config.bl_window` is subtracted, and the waveforms are pole-zero corrected with the decay time `τ`. For each rise time `rt` the waveforms are filtered with a `TrapezoidalChargeFilter(rt, ft)` and the filtered waveform is evaluated at `config.enc_pickoff_trap` by a signal estimator.
+
+# Keywords
+- `ft`: flat-top time
 
 # Returns
-    - `enc_trap_grid`: Array ENC noise values for the given trap rise time grid
+- `Matrix{Float64}` of size `(length(config.e_grid_rt_trap), length(wvfs))`: row `r` holds the values for the `r`-th rise time
 """
 function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=2.0u"µs") where T<:Real
     # get config parameters
@@ -144,12 +164,17 @@ export dsp_trap_rt_optimization
 
 
 """
-    dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
+    dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}; ft::Quantity{T}=2.0u"µs") where T<:Real
 
-Get ENC noise grid values for given CUSP grid rise times.
+Values of the CUSP filter at a fixed time for each rise time in `config.e_grid_rt_cusp`, for estimating the equivalent noise charge (ENC).
+
+The waveforms are decoded, the baseline mean in `config.bl_window` is subtracted, and the waveforms are pole-zero corrected with the decay time `τ`. For each rise time `rt` the waveforms are filtered with a `CUSPChargeFilter` with the flat-top time `ft`, the length `config.flt_length_cusp` and the CR filter switched off and the filtered waveform is evaluated at `config.enc_pickoff_cusp` by a signal estimator.
+
+# Keywords
+- `ft`: flat-top time
 
 # Returns
-    - `enc_cusp_grid`: Array ENC noise values for the given CUSP rise time grid
+- `Matrix{Float64}` of size `(length(config.e_grid_rt_cusp), length(wvfs))`: row `r` holds the values for the `r`-th rise time
 """
 function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=2.0u"µs") where T<:Real
     # get config parameters
@@ -195,12 +220,17 @@ export dsp_cusp_rt_optimization
 
 
 """
-    dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
+    dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}; ft::Quantity{T}=2.0u"µs") where T<:Real
 
-Get ENC noise grid values for given ZAC grid rise times.
+Values of the ZAC filter at a fixed time for each rise time in `config.e_grid_rt_zac`, for estimating the equivalent noise charge (ENC).
+
+The waveforms are decoded, the baseline mean in `config.bl_window` is subtracted, and the waveforms are pole-zero corrected with the decay time `τ`. For each rise time `rt` the waveforms are filtered with a `ZACChargeFilter` with the flat-top time `ft`, the length `config.flt_length_zac` and the CR filter switched off and the filtered waveform is evaluated at `config.enc_pickoff_zac` by a signal estimator.
+
+# Keywords
+- `ft`: flat-top time
 
 # Returns
-    - `enc_zac_grid`: Array ENC noise values for the given ZAC rise time grid
+- `Matrix{Float64}` of size `(length(config.e_grid_rt_zac), length(wvfs))`: row `r` holds the values for the `r`-th rise time
 """
 function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=2.0u"µs") where T<:Real
     # get config parameters
@@ -248,10 +278,12 @@ export dsp_zac_rt_optimization
 """
     dsp_trap_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T}) where T<:Real
 
-Get energy grid values for given trap grid rise times while varying the flat-top time.
+Energy of the trapezoidal filter for the rise time `rt` and each flat-top time in `config.e_grid_ft_trap`.
+
+The waveforms are decoded, the baseline mean in `config.bl_window` is subtracted, and the waveforms are pole-zero corrected with the decay time `τ`. `t50` is the time at which a waveform reaches 50% of its maximum. For each flat-top time `ft` the waveforms are filtered with a `TrapezoidalChargeFilter(rt, ft)`, and the energy is the value of the filtered waveform at `t50 + rt + ft/2` determined by a signal estimator.
 
 # Returns
-    - `e_grid`: Array energy values for the given trap rise time grid at a given flat-top time grid.
+- `Matrix{Union{Missing, Float32}}` of size `(length(config.e_grid_ft_trap), length(wvfs))`: row `f` holds the energies for the `f`-th flat-top time
 """
 function dsp_trap_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T}) where T<:Real
     # get config parameters
@@ -296,10 +328,12 @@ export dsp_trap_ft_optimization
 """
     dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T}) where T<:Real
 
-Get energy grid values for given CUSP grid rise times while varying the flat-top time.
+Energy of the CUSP filter for the rise time `rt` and each flat-top time in `config.e_grid_ft_cusp`.
+
+The waveforms are decoded, the baseline mean in `config.bl_window` is subtracted, and the waveforms are pole-zero corrected with the decay time `τ`. `t50` is the time at which a waveform reaches 50% of its maximum. For each flat-top time `ft` the waveforms are filtered with a `CUSPChargeFilter(rt, ft, ...)` of length `config.flt_length_cusp` with the CR filter switched off, and the energy is the value of the filtered waveform at `t50 + config.flt_length_cusp/2` determined by a signal estimator.
 
 # Returns
-    - `e_grid`: Array energy values for the given CUSP rise time grid at a given flat-top time grid.
+- `Matrix{Union{Missing, Float32}}` of size `(length(config.e_grid_ft_cusp), length(wvfs))`: row `f` holds the energies for the `f`-th flat-top time
 """
 function dsp_cusp_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T}) where T<:Real
     # get config parameters
@@ -349,10 +383,12 @@ export dsp_cusp_ft_optimization
 """
     dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T}) where T<:Real
 
-Get energy grid values for given ZAC grid rise times while varying the flat-top time.
+Energy of the ZAC filter for the rise time `rt` and each flat-top time in `config.e_grid_ft_zac`.
 
-Returns:
-    - `e_grid`: Array energy values for the given ZAC rise time grid at a given flat-top time grid.
+The waveforms are decoded, the baseline mean in `config.bl_window` is subtracted, and the waveforms are pole-zero corrected with the decay time `τ`. `t50` is the time at which a waveform reaches 50% of its maximum. For each flat-top time `ft` the waveforms are filtered with a `ZACChargeFilter(rt, ft, ...)` of length `config.flt_length_zac` with the CR filter switched off, and the energy is the value of the filtered waveform at `t50 + config.flt_length_zac/2` determined by a signal estimator.
+
+# Returns
+- `Matrix{Union{Missing, Float32}}` of size `(length(config.e_grid_ft_zac), length(wvfs))`: row `f` holds the energies for the `f`-th flat-top time
 """
 function dsp_zac_ft_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, rt::Quantity{T}) where T<:Real
     # get config parameters
@@ -399,20 +435,21 @@ end
 export dsp_zac_ft_optimization
 
 
-""" 
+"""
     dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
 
-Optimize the Savitzky-Golay filter parameters for a given waveform set.
+Energy and A/E for each window length in `config.a_grid_wl_sg` of the Savitzky-Golay current filter.
+
+The waveforms are decoded and the baseline mean in `config.bl_window` is subtracted. The quality-cut label is determined from these waveforms. The waveforms are then pole-zero corrected with `τ`. The energy is the value of a `TrapezoidalChargeFilter(rt, ft)` at `t50 + rt + ft/2`, determined by a signal estimator, where `t50` is the time at which the waveform reaches 50% of its maximum. For each window length `wl` the current is the maximum in `config.current_window` of the waveform filtered with `SavitzkyGolayFilter(wl, config.sg_flt_degree, 1)`. A/E is the current without its unit divided by the energy.
 
 # Arguments
-    - `f_evaluate_qc`: Optional ML QC evaluation function. If missing, default qc_label=-1 is used.
+- `pars_filter`: needs `pars_filter.trap.rt` and `pars_filter.trap.ft`, the rise and flat-top time of the energy filter
+
+# Keywords
+- `f_evaluate_qc`: function for [`get_qc_classifier`](@ref). With `missing` no classification is done and `qc_label` is -1.
 
 # Returns
-    - `aoe`: Array of efficiency values for the given Savitzky-Golay filter parameters
-    - `energy`: Array of energy values for the given Savitzky-Golay filter parameters
-    - `blmean`: Baseline mean value
-    - `blslope`: Baseline slope value
-    - `qc_label`: QC labels (-1 if no ML model available)
+- table with one row per waveform and the columns `aoe` (A/E for all window lengths of the grid, as a vector per waveform), `energy`, `blmean`, `blslope`, `t50` (in µs) and `qc_label`
 """
 function dsp_sg_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
     # get config parameters
@@ -469,20 +506,16 @@ end
 export dsp_sg_optimization
 
 
-""" 
+"""
     dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
 
-Optimize the Savitzky-Golay filter parameters for a given waveform set.
+Variant of [`dsp_sg_optimization`](@ref) for compressed data.
 
-# Arguments
-    - `f_evaluate_qc`: Optional ML QC evaluation function. If missing, default qc_label=-1 is used.
+The baseline, quality-cut label, `t50` and energy are determined from the presummed waveforms `wvfs_pre`. The current is determined from the windowed waveforms `wvfs_wdw`, from which `blmean / presum_rate` is subtracted. The output table has the same columns; `t50` is the time of the presummed waveform.
 
-# Returns
-    - `aoe`: Array of efficiency values for the given Savitzky-Golay filter parameters
-    - `energy`: Array of energy values for the given Savitzky-Golay filter parameters
-    - `blmean`: Baseline mean value
-    - `blslope`: Baseline slope value
-    - `qc_label`: QC labels (-1 if no ML model available)
+# Keywords
+- `presum_rate`: number of samples summed in the presummed waveforms
+- `f_evaluate_qc`: function for [`get_qc_classifier_compressed`](@ref)
 """
 function dsp_sg_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
     # get config parameters
@@ -545,19 +578,9 @@ export dsp_sg_optimization_compressed
 """
     dsp_mwa_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
 
-Optimize the window length of the MWA current filter (`MovingWindowMultiFilter` on the
-simple-derivative current) for the A/E parameter, same scheme as `dsp_sg_optimization`.
+Energy and A/E for each window length in `config.a_grid_wl_mwa` of the moving-window-average current filter.
 
-# Arguments
-    - `f_evaluate_qc`: Optional ML QC evaluation function. If missing, default qc_label=-1 is used.
-
-# Returns
-    - `aoe`: A/E values for each MWA window length in `config.a_grid_wl_mwa`
-    - `energy`: Array of energy values
-    - `blmean`: Baseline mean value
-    - `blslope`: Baseline slope value
-    - `t50`: 50% rise time of the waveform
-    - `qc_label`: QC labels (-1 if no ML model available)
+Same as [`dsp_sg_optimization`](@ref), except for the current: the pole-zero-corrected waveforms are filtered with `DerivativeFilter(1)` and then with `MovingWindowMultiFilter(wl; passes = config.a_mwa_passes)` for each window length `wl`, and the maximum in `config.current_window` is the current. This is the chain of the column `a_mwa` of [`dsp_icpc`](@ref).
 """
 function dsp_mwa_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
     # get config parameters
@@ -612,18 +635,11 @@ end
 export dsp_mwa_optimization
 
 """
-    dsp_mwa_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing)
+    dsp_mwa_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
 
-Optimize the window length of the MWA current filter (`MovingWindowMultiFilter` on the
-simple-derivative current) for the A/E parameter, same scheme as `dsp_sg_optimization_compressed`.
+Variant of [`dsp_mwa_optimization`](@ref) for compressed data.
 
-# Returns
-    - `aoe`: A/E values for each MWA window length in `config.a_grid_wl_mwa`
-    - `energy`: Array of energy values
-    - `blmean`: Baseline mean value
-    - `blslope`: Baseline slope value
-    - `t50`: 50% rise time of the presummed waveform
-    - `qc_label`: QC labels (-1 if no ML model available)
+The arguments and the split of the work between `wvfs_pre` and `wvfs_wdw` are the same as for [`dsp_sg_optimization_compressed`](@ref).
 """
 function dsp_mwa_optimization_compressed(wvfs_wdw::ArrayOfRDWaveforms, wvfs_pre::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; presum_rate::Real=T(8), f_evaluate_qc::Union{Function, Missing}=missing) where T<:Real
     # get config parameters

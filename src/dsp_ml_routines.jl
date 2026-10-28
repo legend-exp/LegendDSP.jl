@@ -1,7 +1,16 @@
 """
     get_qc_classifier(wvfs::ArrayOfRDWaveforms, f_evaluate_qc::Function)
+    get_qc_classifier(wvfs::ArrayOfRDWaveforms, f_evaluate_qc::Function, config::DSPConfig)
 
-Get a classifier for quality cuts using the given waveforms and evaluation function which evulates a predefined SVM model.
+Quality-cut labels of the waveforms `wvfs`, evaluated by the support vector machine function `f_evaluate_qc`.
+
+Each waveform is filtered five times with `HaarAveragingFilter(2)`, which reduces the number of samples by a factor of 32, and divided by the larger of the absolute values of its minimum and maximum (waveforms that are zero everywhere are not scaled). The filtered signals form the columns of a matrix that is passed to `f_evaluate_qc`. The method with `config` subtracts the baseline mean in `config.bl_window` first; the other method uses `wvfs` as given.
+
+# Arguments
+- `f_evaluate_qc`: function that returns the tuple `(labels, decision_values)` for a matrix with one column per waveform, as returned by [`get_qc_ml_func`](@ref)
+
+# Returns
+- vector of labels, one per waveform
 """
 function get_qc_classifier end
 export get_qc_classifier
@@ -37,7 +46,7 @@ end
     get_qc_classifier_compressed(wvfs::ArrayOfRDWaveforms, f_evaluate_qc::Function)
     get_qc_classifier_compressed(wvfs::ArrayOfRDWaveforms, f_evaluate_qc::Function, config::DSPConfig)
 
-Get a classifier for quality cuts using the given waveforms and evaluation function which evulates a predefined SVM model.
+Variant of [`get_qc_classifier`](@ref) for presummed waveforms: each waveform is filtered twice instead of five times with `HaarAveragingFilter(2)`, which reduces the number of samples by a factor of 4.
 """
 function get_qc_classifier_compressed end 
 export get_qc_classifier_compressed

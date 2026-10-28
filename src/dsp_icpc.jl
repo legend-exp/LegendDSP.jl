@@ -1,70 +1,66 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
+    dsp_icpc(data::Table, config::DSPConfig, τ::Quantity, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing)
 
-DSP for ICPC detectors. It needs the decay time `τ` of the detector and the filter parameters `pars_filter` for the optimal filter parameters
-for the Trap, CUSP and ZAC filter. 
-# Input data
-The input data is a table with the following columns:
-- `waveform`: waveform data
-- `baseline`: baseline from FADC
-- `timestamp`: timestamp from FADC
-- `eventnumber`: event ID from FADC
-- `daqenergy`: energy from FADC
+DSP chain for HPGe (ICPC) detector waveforms. Returns a table with one row per waveform.
 
-# Output data
-The output data is a table with the following columns:
-- `blmean`: baseline mean
-- `blsigma`: baseline sigma
-- `blslope`: baseline slope
-- `bloffset`: baseline offset
-- `tailmean`: tail mean after PZ correction
-- `tailsigma`: tail sigma after PZ correction
-- `tailslope`: tail slope after PZ correction
-- `tailoffset`: tail offset after PZ correction
-- `t0`: start time of waveform drift
-- `t10`: timepoint of 10% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t50`: timepoint of 50% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t80`: timepoint of 80% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t90`: timepoint of 90% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t99`: timepoint of 99% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t50_current`: timepoint of current rise to 50% of maximum
-- `t_amax`: quadratically interpolated timepoint of maximum current
-- `tail_τ`: tail decay time
-- `tail_mean`: tail mean before PZ correction
-- `tail_sigma`: tail sigma before PZ correction
-- `e_max`: maximum of waveform
-- `e_min`: minimum of waveform
-- `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
-- `e_313`: energy of waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
-- `e_101010`: energy of waveform with trapezoidal filter of 10µs rise time with 10µs flat-top
-- `a_sg`: maximum of the current from the Savitzky-Golay derivative (`sg_flt_degree`) with the optimized window length from the `aoeopt` pars
-- `a_sg_<ns>`: the same with the fixed window lengths `a_sg_windows` of the config
-- `a_raw`: maximum of the raw current (simple derivative)
-- `a_mwa`: maximum of the raw current after the multi-pass moving-window average (`a_mwa_passes`, alternating left and right) with the optimized window length from the `aoeopt` pars
-- `a_mwa_<ns>`: the same with the fixed window lengths `a_mwa_windows` of the config
-- `t_a_sg`, `t_a_mwa`: quadratically interpolated timepoints of the `a_sg` and `a_mwa` maxima
-- `e_10410_inv`: maximum of inverted waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
-- `e_313_inv`: maximum of inverted waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
-- `t0_inv`: start time of inverted waveform drift
-- `e_trap`: energy of waveform with trapezoidal filter of optimized rise and flat-top time
-- `e_cusp`: energy of waveform with CUSP filter of optimized rise and flat-top time
-- `e_zac`: energy of waveform with ZAC filter of optimized rise and flat-top time
-- `qdrift`: Q-drift parameter
-- `lq80_<early><gap><late>`, `lq90_…`, `lqamax_…`: LQ parameters from `t80`, `t90` and `t_amax`, charge in the late window minus charge in the early window, one column per `[early, gap, late]` of `lq_windows` in the config (lengths in 0.1 µs, e.g. `lq80_250025`: 2.5 µs early, no gap, 2.5 µs late)
-- `blfc`: baseline from FADC
-- `timestamp`: timestamp from FADC
-- `eventID_fadc`: event ID from FADC
-- `e_fc`: energy from FADC
-- `pretrace_diff`: difference between first sample and baseline mean
-- `drift_time`: drift time between t0 and 90% of waveform maximum
-- `inTrace_intersect`: position of in-trace pile-up
-- `inTrace_n`: multiplicity of in-trace pile-up
-- `n_sat_low`: number of samples the waveform is saturated at low of FADC range
-- `n_sat_high`: number of samples the waveform is saturated at high of FADC range
-- `n_sat_low_cons`: number of consecutive samples the waveform is saturated at low of FADC range
-- `n_sat_high_cons`: number of consecutive samples the waveform is saturated at high of FADC range
+The baseline is subtracted, the waveforms are pole-zero corrected with the decay time `τ`, and timing, energy, current, charge-drift, quality and saturation parameters are determined. Use [`dsp_icpc_compressed`](@ref) for compressed data.
+
+# Arguments
+- `data`: table with the input columns below; encoded columns are decoded with `decode_data`
+- `config`: [`DSPConfig`](@ref). `config.kwargs_pars` needs the entries `fc_bit_depth`, `t0_flt_pars`, `t0_mintot`, `tx_mintot`, `intrace_mintot`, `int_interpolation_order`, `int_interpolation_length`, `sig_interpolation_order` and `sig_interpolation_length`.
+- `τ`: decay time of the preamplifier signal, used for the pole-zero correction
+- `pars_filter`: optimized filter parameters as a `PropDict`: `trap`, `cusp` and `zac` with the entries `rt` and `ft`, and `sg` and `mwa` with the entry `wl`. Missing entries are taken from `config.default_flt_param`.
+
+# Keywords
+- `f_evaluate_qc`: function for [`get_qc_classifier`](@ref). With `missing` no classification is done and `qc_label` is -1.
+
+# Input columns
+`waveform`, `baseline`, `timestamp`, `eventnumber`, `daqenergy`
+
+# Output columns
+Amplitudes have the unit of the waveform samples. Times with a stated unit are converted; the others are in the unit of the waveform time axis.
+
+Baseline and tail:
+- `blmean`, `blsigma`, `blslope`, `bloffset`: statistics of the waveform in `config.bl_window`
+- `tailmean`, `tailsigma`, `tailslope`, `tailoffset`: the same statistics of the pole-zero-corrected waveform in `config.tail_window`
+- `tail_τ`, `tail_mean`, `tail_sigma`: decay time, and mean and standard deviation of the logarithm of the baseline-subtracted waveform in `config.tail_window`, from [`tailstats`](@ref)
+
+Timing, from the pole-zero-corrected waveform, in µs:
+- `t0`: start of the charge rise, from [`get_t0`](@ref)
+- `t10`, `t50`, `t80`, `t90`, `t99`: first times at which the waveform reaches 10%, 50%, 80%, 90% and 99% of `e_101010`, from [`get_threshold`](@ref)
+- `t50_current`: time at which the Savitzky-Golay derivative reaches half of its maximum
+- `drift_time`: `t90 - t0`, in ns
+
+Energies, from the pole-zero-corrected waveform:
+- `e_max`, `e_min`: maximum and minimum of the baseline-subtracted waveform before the pole-zero correction
+- `e_10410`, `e_535`, `e_313`, `e_101010`: maximum after a `TrapezoidalChargeFilter` with rise time and flat-top time of 10 and 4 µs, 5 and 3 µs, 3 and 1 µs, and 10 and 10 µs
+- `e_trap`, `e_cusp`, `e_zac`: value of the trapezoidal, CUSP and ZAC filtered waveform at `t50 + rt + ft/2` (trapezoidal) and `t50 + flt_length/2` (CUSP and ZAC), determined by a signal estimator. `rt` and `ft` are the optimized rise and flat-top time of the respective filter in `pars_filter`, and `flt_length` is `config.flt_length_cusp` or `config.flt_length_zac`.
+- `e_trap_max`, `e_cusp_max`, `e_zac_max`: maximum of the filtered waveform
+- `t_trap_max`, `t_cusp_max`, `t_zac_max`: time of that maximum
+- `e_10410_inv`, `e_313_inv`: maximum after the `e_10410` and `e_313` filters of the waveform multiplied by -1
+- `t0_inv`: t0 of the waveform multiplied by -1, in µs, determined with the default `flt_pars` of [`get_t0`](@ref)
+
+Current:
+- `a_raw`: maximum in `config.current_window` of the simple derivative (`DerivativeFilter(1)`)
+- `a_sg`, `t_a_sg`: maximum in `config.current_window` of the Savitzky-Golay derivative with window length `sg.wl` and polynomial degree `config.sg_flt_degree`, and its interpolated time
+- `a_mwa`, `t_a_mwa`: maximum in `config.current_window` of the simple derivative after `MovingWindowMultiFilter(mwa.wl; passes = config.a_mwa_passes)`, and its interpolated time
+- `a_sg_<ns>`, `a_mwa_<ns>`: the same maxima for each fixed window length in `config.a_sg_windows` and `config.a_mwa_windows`, with the window length in ns in the column name
+- `t_amax`: interpolated time of the maximum of the simple derivative over the whole waveform
+
+Charge drift:
+- `qdrift`: Q-drift parameter from [`get_qdrift`](@ref), using `t0` and `config.qdrift_int_length`
+- `lq80_<early><gap><late>`, `lq90_<early><gap><late>`, `lqamax_<early><gap><late>`: LQ parameters from [`get_lq`](@ref) starting at `t80`, `t90` and `t_amax`, one column for each `[early, gap, late]` of `config.lq_windows`. The window lengths in the name are in units of 0.1 µs with two digits each, so `lq80_250025` has an early window of 2.5 µs, no gap and a late window of 2.5 µs.
+
+Quality and saturation:
+- `qc_label`: label from `f_evaluate_qc`, evaluated on the baseline-subtracted waveform before the pole-zero correction
+- `inTrace_intersect`, `inTrace_n`: time and number of in-trace pile-up triggers, from [`get_triggers`](@ref) on the Savitzky-Golay derivative with the threshold `config.inTraceCut_std_threshold` in standard deviations of its baseline
+- `n_sat_low`, `n_sat_high`: number of samples of the unsubtracted waveform equal to 0 and to `2^fc_bit_depth - fc_bit_depth`, from [`saturation`](@ref)
+- `n_sat_low_cons`, `n_sat_high_cons`: longest run of consecutive samples at those values
+
+FADC values:
+- `blfc`, `timestamp`, `eventID_fadc`, `e_fc`: baseline, timestamp, event number and energy from the FADC
 """
 function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where {Q <: Table, T<:Real}
     # get config parameters
@@ -254,70 +250,68 @@ export dsp_icpc
 
 
 """
-    dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict) where {Q <: Table, T<:Real}
+    dsp_icpc_compressed(data::Table, config::DSPConfig, τ::Quantity, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing)
 
-DSP for ICPC detectors. It needs the decay time `τ` of the detector and the filter parameters `pars_filter` for the optimal filter parameters
-for the Trap, CUSP and ZAC filter. 
-# Input data
-The input data is a table with the following columns:
-- `waveform`: waveform data
-- `baseline`: baseline from FADC
-- `timestamp`: timestamp from FADC
-- `eventnumber`: event ID from FADC
-- `daqenergy`: energy from FADC
+DSP chain for HPGe (ICPC) detector waveforms of compressed data. Returns a table with one row per waveform.
 
-# Output data
-The output data is a table with the following columns:
-- `blmean`: baseline mean
-- `blsigma`: baseline sigma
-- `blslope`: baseline slope
-- `bloffset`: baseline offset
-- `tailmean`: tail mean after PZ correction
-- `tailsigma`: tail sigma after PZ correction
-- `tailslope`: tail slope after PZ correction
-- `tailoffset`: tail offset after PZ correction
-- `t0`: start time of waveform drift
-- `t10`: timepoint of 10% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t50`: timepoint of 50% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t80`: timepoint of 80% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t90`: timepoint of 90% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t99`: timepoint of 99% of the pulse amplitude (maximum of the 101010 trapezoid)
-- `t50_current`: timepoint of current rise to 50% of maximum
-- `t_amax`: quadratically interpolated timepoint of maximum current
-- `tail_τ`: tail decay time
-- `tail_mean`: tail mean before PZ correction
-- `tail_sigma`: tail sigma before PZ correction
-- `e_max`: maximum of waveform
-- `e_min`: minimum of waveform
-- `e_10410`: energy of waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
-- `e_313`: energy of waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
-- `e_101010`: energy of waveform with trapezoidal filter of 10µs rise time with 10µs flat-top
-- `a_sg`: maximum of the current from the Savitzky-Golay derivative (`sg_flt_degree`) with the optimized window length from the `aoeopt` pars
-- `a_sg_<ns>`: the same with the fixed window lengths `a_sg_windows` of the config
-- `a_raw`: maximum of the raw current (simple derivative)
-- `a_mwa`: maximum of the raw current after the multi-pass moving-window average (`a_mwa_passes`, alternating left and right) with the optimized window length from the `aoeopt` pars
-- `a_mwa_<ns>`: the same with the fixed window lengths `a_mwa_windows` of the config
-- `t_a_sg`, `t_a_mwa`: quadratically interpolated timepoints of the `a_sg` and `a_mwa` maxima
-- `e_10410_inv`: maximum of inverted waveform with trapezoidal filter of 10µs rise time with 4µs flat-top
-- `e_313_inv`: maximum of inverted waveform with trapezoidal filter of 3µs rise time with 1µs flat-top
-- `t0_inv`: start time of inverted waveform drift
-- `e_trap`: energy of waveform with trapezoidal filter of optimized rise and flat-top time
-- `e_cusp`: energy of waveform with CUSP filter of optimized rise and flat-top time
-- `e_zac`: energy of waveform with ZAC filter of optimized rise and flat-top time
-- `qdrift`: Q-drift parameter
-- `lq80_<early><gap><late>`, `lq90_…`, `lqamax_…`: LQ parameters from `t80`, `t90` and `t_amax`, charge in the late window minus charge in the early window, one column per `[early, gap, late]` of `lq_windows` in the config (lengths in 0.1 µs, e.g. `lq80_250025`: 2.5 µs early, no gap, 2.5 µs late)
-- `blfc`: baseline from FADC
-- `timestamp`: timestamp from FADC
-- `eventID_fadc`: event ID from FADC
-- `e_fc`: energy from FADC
-- `pretrace_diff`: difference between first sample and baseline mean
-- `drift_time`: drift time between t0 and 90% of waveform maximum
-- `inTrace_intersect`: position of in-trace pile-up
-- `inTrace_n`: multiplicity of in-trace pile-up
-- `n_sat_low`: number of samples the waveform is saturated at low of FADC range
-- `n_sat_high`: number of samples the waveform is saturated at high of FADC range
-- `n_sat_low_cons`: number of consecutive samples the waveform is saturated at low of FADC range
-- `n_sat_high_cons`: number of consecutive samples the waveform is saturated at high of FADC range
+Each event has a presummed waveform, in which `presum_rate` consecutive samples are summed, and a windowed waveform with the original sampling around the signal rise. Energies, the tail and the baseline are determined from the presummed waveform, and timing, current and charge-drift parameters from the windowed waveform. The baseline mean of the presummed waveform is subtracted from it, and `blmean / presum_rate` from the windowed waveform. Both waveforms are then pole-zero corrected with `τ`.
+
+# Arguments
+- `data`: table with the input columns below; encoded columns are decoded with `decode_data`. `presum_rate` has to be the same for all events.
+- `config`: [`DSPConfig`](@ref). `config.kwargs_pars` needs the entries `fc_bit_depth`, `t0_flt_pars`, `t0_mintot`, `tx_mintot`, `int_interpolation_order`, `int_interpolation_length`, `sig_interpolation_order` and `sig_interpolation_length`.
+- `τ`: decay time of the preamplifier signal, used for the pole-zero correction
+- `pars_filter`: optimized filter parameters as a `PropDict`, as for [`dsp_icpc`](@ref)
+
+# Keywords
+- `f_evaluate_qc`: function for [`get_qc_classifier_compressed`](@ref). With `missing` no classification is done and `qc_label` is -1.
+
+# Input columns
+`waveform_presummed`, `waveform_windowed`, `presum_rate`, `baseline`, `timestamp`, `eventnumber`, `daqenergy`, `t_sat_lo`, `t_sat_hi`, `deadtime`
+
+# Output columns
+Amplitudes have the unit of the waveform samples; those from the presummed waveform are sums over `presum_rate` samples. Times with a stated unit are converted; the others are in the unit of the waveform time axis.
+
+FADC values and saturation:
+- `blfc`, `timestamp`, `eventID_fadc`, `e_fc`, `deadtime`, `t_sat_lo`, `t_sat_hi`: copied from the input
+- `n_sat_low`, `n_sat_high`, `n_sat_low_cons`, `n_sat_high_cons`: number of samples and longest run of consecutive samples of the unsubtracted presummed waveform equal to 0 and to `(2^fc_bit_depth - fc_bit_depth) * presum_rate`, from [`saturation`](@ref)
+
+Baseline and tail, from the presummed waveform:
+- `blmean`, `blsigma`, `blslope`, `bloffset`, `bl_slope_sigma`: statistics in `config.bl_window`, with `bl_slope_sigma` the standard deviation of the residuals of the slope fit
+- `tailmean`, `tailsigma`, `tailslope`, `tailoffset`: the same statistics of the pole-zero-corrected waveform in `config.tail_window`
+- `tail_τ`, `tail_mean`, `tail_sigma`: decay time, and mean and standard deviation of the logarithm of the baseline-subtracted waveform in `config.tail_window`, from [`tailstats`](@ref)
+- `auxpz1_mean`, `auxpz1_sigma`, `auxpz1_slope_sigma`, `auxpz2_mean`, `auxpz2_sigma`, `auxpz2_slope_sigma`: mean, standard deviation and slope residual of the pole-zero-corrected waveform in `config.auxpz1_window` and `config.auxpz2_window`
+
+Extrema:
+- `e_max`, `t_max`: maximum and its time from the baseline-subtracted presummed waveform
+- `e_min`, `t_min`: minimum and its time from the baseline-subtracted windowed waveform
+- `e_max_pre`, `e_min_pre`, `t_max_pre`, `t_min_pre`: maximum, minimum and their times from the baseline-subtracted presummed waveform
+
+Timing, in µs, from the pole-zero-corrected waveforms:
+- `t0`: start of the charge rise of the windowed waveform, from [`get_t0`](@ref)
+- `t10`, `t50`, `t80`, `t90`, `t99`: first times at which the windowed waveform reaches 10%, 50%, 80%, 90% and 99% of `e_101010 / presum_rate`
+- `t50_pre`: first time at which the presummed waveform reaches 50% of `e_101010`
+- `drift_time`: `t90 - t0`, in ns
+- `t50_current`: time at which the Savitzky-Golay derivative of the presummed waveform reaches half of its maximum. The filter window length is `sg.wl * presum_rate / 2`.
+- `t_amax`: interpolated time of the maximum of the simple derivative of the windowed waveform
+
+Energies, from the presummed waveform:
+- `e_10410`, `e_535`, `e_313`, `e_101010`: maximum after a `TrapezoidalChargeFilter` with rise time and flat-top time of 10 and 4 µs, 5 and 3 µs, 3 and 1 µs, and 10 and 10 µs
+- `t_10410`, `t_535`, `t_313`, `t_101010`: times of those maxima
+- `e_trap`, `e_cusp`, `e_zac`: value of the trapezoidal, CUSP and ZAC filtered waveform at `t50_pre + rt + ft/2` (trapezoidal) and `t50_pre + flt_length/2` (CUSP and ZAC), determined by a signal estimator, with the parameters as for [`dsp_icpc`](@ref)
+- `e_trap_max`, `e_cusp_max`, `e_zac_max`, `t_trap_max`, `t_cusp_max`, `t_zac_max`: maximum of the filtered waveform and its time
+- `e_10410_inv`, `e_313_inv`: maximum after the `e_10410` and `e_313` filters of the presummed waveform multiplied by -1
+- `t0_inv`: t0 of the windowed waveform multiplied by -1, in µs, determined with the default `flt_pars` of [`get_t0`](@ref)
+
+Current, from the windowed waveform:
+- `a_raw`, `a_sg`, `t_a_sg`, `a_mwa`, `t_a_mwa`, `a_sg_<ns>`, `a_mwa_<ns>`: as for [`dsp_icpc`](@ref)
+
+Charge drift, from the windowed waveform:
+- `qdrift`: Q-drift parameter from [`get_qdrift`](@ref), using `t0` and `config.qdrift_int_length`
+- `lq80_<early><gap><late>`, `lq90_<early><gap><late>`, `lqamax_<early><gap><late>`: LQ parameters as for [`dsp_icpc`](@ref)
+
+Quality:
+- `qc_label`: label from `f_evaluate_qc`, evaluated on the baseline-subtracted presummed waveform before the pole-zero correction
+- `trigger_position`, `trigger_multiplicity`: time and number of in-trace triggers, from [`get_triggers`](@ref) on the presummed waveform filtered with `TrapezoidalChargeFilter(2u"µs", 1u"µs")`, with the threshold `config.inTraceCut_std_threshold` in standard deviations of its baseline and a minimum time over threshold of 2 µs
 """
 function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::PropDict; f_evaluate_qc::Union{Function, Missing}=missing) where {Q <: Table, T<:Real}
     # get config parameters

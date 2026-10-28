@@ -77,6 +77,13 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         )
 end
 
+"""
+    get_fltpars(pd::PropDict, flt::Symbol, dspconfig::DSPConfig)
+
+Filter parameters for the filter `flt` from `pd`, with missing entries taken from `dspconfig.default_flt_param`.
+
+Returns the window length `pd.sg.wl` or `pd.mwa.wl` for `flt` equal to `:sg` or `:mwa`, and the tuple `(rt, ft)` of rise time and flat-top time for `:trap`, `:cusp` and `:zac`.
+"""
 function get_fltpars(pd::PropDict, flt::Symbol, dspconfig::DSPConfig)
     if flt == :sg || flt == :mwa
         return get(get(pd, flt, PropDict()), :wl, dspconfig.default_flt_param[flt])

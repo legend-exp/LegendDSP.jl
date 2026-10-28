@@ -1,9 +1,11 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    struct TimeAxisFilter <: AbstractRadIIRFilter
+    struct TimeAxisFilter{T<:RealQuantity} <: AbstractRadIIRFilter
 
-Updates the time range step to `period` and shifts the time axis by `offset`.
+Replace the time axis of a waveform by a range with step `period` that starts at `first(time) + offset`. The signal is not changed.
+
+The time axis of the waveform needs to be a range, otherwise an `ArgumentError` is thrown.
 
 Working example:
 ```julia
@@ -21,6 +23,7 @@ wf_new = flt(wf)
 Constructors:
 
 * ```$(FUNCTIONNAME)(; fields...)```
+* ```$(FUNCTIONNAME)(period, offset=false*period)```
 
 Fields:
 
