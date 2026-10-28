@@ -197,4 +197,51 @@ end
                                  leftendpoint(config.current_window), rightendpoint(config.current_window)).max
         @test isequal(shape.a, a_ref)
     end
+    @testset "realized flat-top time" begin
+        dt = prep.sampling_period
+        nsamp(x) = round(Int, ustrip(NoUnits, x / dt))
+        w = prep.wvfs_pz[1:3]
+        no_cr = 10000000.0u"µs"
+        fts = (0.05:0.0235:4.0) .* u"µs"
+        rt_flt = 4.0u"µs"
+        for len in (38.0u"µs", 38.016u"µs")
+            n_len = nsamp(len)
+            filters = (
+                cusp = ft -> CUSPChargeFilter(rt_flt, ft, no_cr, len, ustrip(NoUnits, len / dt)).(w),
+                zac  = ft -> ZACChargeFilter(rt_flt, ft, no_cr, len, ustrip(NoUnits, len / dt)).(w),
+            )
+            for flt in (:cusp, :zac)
+                realized = uconvert.(u"µs", realized_flattop.(fts, len, dt, flt))
+                @test all(r -> nsamp(r) ≈ ustrip(NoUnits, r / dt), realized)
+                # the realized value is the flat top that the filter applies
+                for (ft, r) in zip(fts, realized)
+                    @test isequal(filters[flt](ft).signal, filters[flt](r).signal)
+                end
+                # equal realized values give equal filters, distinct ones do not
+                for i in eachindex(fts)[1:end-1]
+                    same = realized[i] == realized[i+1]
+                    out_i, out_j = filters[flt](fts[i]), filters[flt](fts[i+1])
+                    @test same == isequal(out_i.signal, out_j.signal)
+                end
+                @test realized_flattop.(realized, len, dt, flt) ≈ realized
+                # N - FT is made even
+                @test all(r -> iseven(n_len - nsamp(r)), realized)
+                @test all(abs.(realized .- fts) .< 2 * dt)
+            end
+            # an odd number of filter samples shifts a flat top of an even number of samples by one sample
+            @test (realized_flattop(12dt, len, dt, :cusp) == 12dt) == iseven(n_len)
+            @test realized_flattop(13dt, len, dt, :zac) == (isodd(n_len) ? 13dt : 14dt)
+        end
+        @test isodd(nsamp(38.0u"µs")) && iseven(nsamp(38.016u"µs"))
+        # trapezoidal gap
+        for ft in fts
+            r = uconvert(u"µs", realized_flattop(ft, 38.0u"µs", dt, :trap))
+            @test r ≈ nsamp(ft) * dt
+            @test isequal(TrapezoidalChargeFilter(rt_flt, ft).(w).signal, TrapezoidalChargeFilter(rt_flt, r).(w).signal)
+        end
+        # any time unit and Val or Symbol dispatch
+        @test realized_flattop(1536u"ns", 38.0u"µs", dt, Val(:cusp)) == realized_flattop(1.536u"µs", 38.0u"µs", dt, :cusp)
+        @test_throws MethodError realized_flattop(1.0u"µs", 38.0u"µs", dt, :unknown)
+        @test_throws MethodError realized_flattop(1.0, 38.0u"µs", dt, :cusp)
+    end
 end

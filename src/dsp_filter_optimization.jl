@@ -160,6 +160,40 @@ dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, f
 export dsp_energy_rtft
 
 """
+    realized_flattop(ft, flt_length, sampling_period, flt)
+
+Flat-top time that the filter `flt` (`Val(:trap)`, `Val(:cusp)`, `Val(:zac)` or the
+corresponding `Symbol`) applies when it is built with the flat-top time `ft` for waveforms
+sampled with `sampling_period`. `flt_length` is the filter length of CUSP and ZAC and is not
+read for the trapezoidal filter.
+
+`RadiationDetectorDSP` rounds the times of the filters to whole samples:
+- trapezoidal filter: the gap is `round(ft / sampling_period)` samples;
+- CUSP and ZAC: the flat top is `FT = round(ft / sampling_period)` samples and the filter length
+  is `N = round(flt_length / sampling_period)` samples. The two sides of the filter have
+  `(N - FT) / 2` samples each, so the flat top is lengthened by one sample if `N - FT` is odd.
+
+The rule mirrors the installed `RadiationDetectorDSP` (`cusp_charge_filter_coeffs`,
+`zac_charge_filter_coeffs`, `fltinstance`). Two flat-top times with the same realized value
+produce identical filters, and the realized value is its own realized value.
+
+Returns the realized flat-top time, a multiple of `sampling_period`.
+"""
+function realized_flattop(ft::Unitful.Time{<:Real}, flt_length::Unitful.Time{<:Real}, sampling_period::Unitful.Time{<:Real}, ::Val{:trap})
+    return round(Int, ustrip(NoUnits, ft / sampling_period)) * sampling_period
+end
+
+function realized_flattop(ft::Unitful.Time{<:Real}, flt_length::Unitful.Time{<:Real}, sampling_period::Unitful.Time{<:Real}, ::Union{Val{:cusp}, Val{:zac}})
+    n_ft = round(Int, ustrip(NoUnits, ft / sampling_period))
+    n_flt = round(Int, ustrip(NoUnits, flt_length / sampling_period))
+    return (iseven(n_flt - n_ft) ? n_ft : n_ft + 1) * sampling_period
+end
+
+realized_flattop(ft::Unitful.Time{<:Real}, flt_length::Unitful.Time{<:Real}, sampling_period::Unitful.Time{<:Real}, flt::Symbol) =
+    realized_flattop(ft, flt_length, sampling_period, Val(flt))
+export realized_flattop
+
+"""
     dsp_pulse_shape_flt_optimization(prep::NamedTuple, config::DSPConfig, sg_wl::Unitful.Time{<:Real})
 
 Pulse-shape quantities of the baseline-subtracted, deconvolved waveforms `prep.wvfs_pz`; only
