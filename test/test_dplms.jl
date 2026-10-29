@@ -320,3 +320,25 @@ end
     @test e.e ≈ vec(res.e_grid[1, :])
     @test e.emax ≈ vec(res.emax_grid[1, :])
 end
+
+@testset "get_dplms_pars" begin
+    config = make_fake_config()
+    Δt = 128.0u"ns"
+    stored = get_dplms_pars(PropDict(:dplms => PropDict(:coefficients => [0.1, 0.2, 0.7], :t_pickoff => 1.0u"µs")), config, Δt)
+    @test stored.coefficients == [0.1, 0.2, 0.7] && stored.t_pickoff == 1.0u"µs"
+    # the default filter is the trapezoid of flt_defaults.dplms read out like e_trap
+    default = get_dplms_pars(PropDict(), config, Δt)
+    @test default.t_pickoff == 6.5u"µs"
+    rng = MersenneTwister(5)
+    wvfs = ArrayOfRDWaveforms([make_dplms_waveform(rng) for _ in 1:20])
+    wvfs_pz = InvCRFilter(400.0u"µs").(shift_waveform.(wvfs, -1000.0))
+    t50 = fill(50.0u"µs", 20)
+    se = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
+    @test dsp_dplms_energy(wvfs_pz, default.coefficients, t50, default.t_pickoff, config.current_window, se).e ≈
+        se.(TrapezoidalChargeFilter(5.0u"µs", 3.0u"µs").(wvfs_pz), t50 .+ 6.5u"µs") rtol = 1e-6
+    pd_nodefault = make_fake_config_pd()
+    delete!(pd_nodefault.flt_defaults, :dplms)
+    @test_throws "flt_defaults.dplms" get_dplms_pars(PropDict(), DSPConfig(pd_nodefault), Δt)
+    @test_throws "no coefficients" get_dplms_pars(PropDict(:dplms => PropDict(:coefficients => Float64[], :t_pickoff => 1.0u"µs")), config, Δt)
+    @test_throws "no t_pickoff" get_dplms_pars(PropDict(:dplms => PropDict(:coefficients => [1.0])), config, Δt)
+end
