@@ -203,7 +203,7 @@ end
 @isdefined(make_fake_config) || include("fake_config.jl")
 
 # Presummed-like pulse: 1024 samples at 128 ns, logistic rise of width `w` samples centered
-# at 50 µs (so the current maximum sits exactly there), exponential tail with decay `τ`,
+# at 50 µs (so half of the current integral is reached there), exponential tail with decay `τ`,
 # white baseline noise σ, DC offset 1000.
 function make_dplms_waveform(rng; w = 2.0, amplitude = 1e4, τ = 400.0u"µs", σ = 5.0)
     Δt = 128.0u"ns"
@@ -238,9 +238,18 @@ end
     @test length(res.ref) == 81
     @test res.ref[end] ≈ 1.0 atol = 0.05
     @test size(res.ref_bins, 2) == 2
-    @test length(res.t_amax) == 300
-    # A-max lands within one sample of the rise center for every event
-    @test all(abs.(res.t_amax .- 50.0u"µs") .<= 128.0u"ns")
+    @test length(res.t50) == 300
+    # t50 lands within one sample of the rise center for every event
+    @test all(abs.(res.t50 .- 50.0u"µs") .<= 128.0u"ns")
+    # t50 is the t50_pre of dsp_icpc_compressed
+    bl = signalstats.(wvfs, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
+    wvfs_pz = InvCRFilter(τ).(shift_waveform.(wvfs, -bl.mean))
+    e_101010 = extremestats.(TrapezoidalChargeFilter(10u"µs", 10u"µs").(wvfs_pz)).max
+    @test res.t50 == get_threshold(wvfs_pz, e_101010 .* 0.5; mintot = config.kwargs_pars.tx_mintot)
+    # widenings beyond n_post leave no flat region in the 81-sample window
+    @test length(res.flat_top) == length(res.shaping_time) == g
+    @test res.flat_top[1] > 0u"ns" && all(>=(0u"ns"), res.flat_top) && all(>(0u"ns"), res.shaping_time)
+    @test length(res.superpulse_bins) == 2
     # superpulse and per-grid-point response
     @test length(res.response) == g
     @test res.response[1] isa RDWaveform
@@ -256,7 +265,7 @@ end
     @test_throws "never reaches" dsp_dplms_optimization(wvfs, config, τ, widths; n_pre = 40, n_post = 40, n_bins = 2, ff_level = 2.0)
     se = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
     t = first(wvfs.time)
-    t_target = t[LegendDSP._sample_index(t, median(res.t_amax))]
+    t_target = t[LegendDSP._sample_index(t, median(res.t50))]
     @test se(res.response[1], t_target + res.t_pickoff) ≈ 1.0 atol = 0.05
     # noise_out predicts the output spread of the filter on pure noise of the training σ
     r0 = dsp_dplms_optimization(wvfs, config, τ, widths; n_pre = 40, n_post = 40, n_bins = 2,
@@ -274,6 +283,9 @@ end
     # drift vector of the wrong length fails
     @test_throws DimensionMismatch dsp_dplms_optimization(wvfs, config, τ, [1.0, 2.0]; n_pre = 40, n_post = 40)
     @test_throws "must be finite" dsp_dplms_optimization(wvfs, config, τ, [NaN; widths[2:end]]; n_pre = 40, n_post = 40)
+    # a waveform without a rising edge has no t50 inside the current window
+    flat_wvf = RDWaveform(first(wvfs.time), fill(1000.0, 1024))
+    @test_throws "for 1 of 300 waveforms" dsp_dplms_optimization(ArrayOfRDWaveforms([flat_wvf; wvfs[2:end]]), config, τ, widths; n_pre = 40, n_post = 40)
 end
 
 @testset "dsp_dplms_optimization default window" begin
@@ -289,6 +301,9 @@ end
     @test all(length.(res.coeffs) .== 2 * res.n_pre + 1)
     @test all(isfinite, res.e_grid)
     @test res.t_pickoff == res.n_post * Δt
+    # wider flat-top terms give longer flat tops and shorter shaping times
+    r_ff = dsp_dplms_optimization(wvfs, config, 400.0u"µs", widths; n_bins = 2)
+    @test all(>(0u"ns"), r_ff.flat_top) && issorted(r_ff.flat_top) && issorted(r_ff.shaping_time; rev = true)
     @test_throws ArgumentError dsp_dplms_optimization(wvfs, config, 400.0u"µs", widths; n_pre = 200, n_post = 200, grid)
 end
 
@@ -301,7 +316,7 @@ end
     bl = signalstats.(wvfs, 0.0u"µs", 39.0u"µs")
     wvfs_pz = InvCRFilter(400.0u"µs").(shift_waveform.(wvfs, -bl.mean))
     se = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
-    e = dsp_dplms_energy(wvfs_pz, res.coeffs[1], res.t_amax, res.t_pickoff, config.current_window, se)
+    e = dsp_dplms_energy(wvfs_pz, res.coeffs[1], res.t50, res.t_pickoff, config.current_window, se)
     @test e.e ≈ vec(res.e_grid[1, :])
     @test e.emax ≈ vec(res.emax_grid[1, :])
 end
