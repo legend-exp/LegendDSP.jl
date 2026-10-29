@@ -90,6 +90,28 @@ function get_fltpars(pd::PropDict, flt::Symbol, dspconfig::DSPConfig)
 end
 
 """
+    get_dplms_pars(pd::PropDict, config::DSPConfig, Δt::Unitful.Time)
+
+DPLMS filter for `dsp_dplms_energy` as `(; coefficients, t_pickoff)`, with `t_pickoff` the
+read-out time after `t50`. Returns `pd.dplms` if present. Otherwise builds the trapezoidal
+filter of `config.default_flt_param.dplms` (`rt`, `ft`) sampled at `Δt`, read out at
+`rt + ft/2`; it gives the same energies as `TrapezoidalChargeFilter(rt, ft)`.
+"""
+function get_dplms_pars(pd::PropDict, config::DSPConfig, Δt::Unitful.Time)
+    if haskey(pd, :dplms)
+        haskey(pd.dplms, :t_pickoff) || throw(ArgumentError("DPLMS parameters have no t_pickoff"))
+        isempty(get(pd.dplms, :coefficients, [])) && throw(ArgumentError("DPLMS parameters have no coefficients"))
+        return (coefficients = Float64.(pd.dplms.coefficients), t_pickoff = pd.dplms.t_pickoff)
+    end
+    haskey(config.default_flt_param, :dplms) || throw(ArgumentError("no DPLMS parameters and no default filter in flt_defaults.dplms of the DSP config"))
+    (; rt, ft) = config.default_flt_param.dplms
+    n_rt, n_ft = round(Int, rt / Δt), round(Int, ft / Δt)
+    n_rt > 0 || throw(ArgumentError("default DPLMS rise time $rt is shorter than the sampling interval $Δt"))
+    (coefficients = [fill(1 / n_rt, n_rt); zeros(n_ft); fill(-1 / n_rt, n_rt)], t_pickoff = rt + ft / 2)
+end
+export get_dplms_pars
+
+"""
     _lq_column_name(t_start::Symbol, windows)
 
 Column name of an LQ parameter: `lq<start>_<early><gap><late>` with the start timepoint without its leading `t`/`t_`

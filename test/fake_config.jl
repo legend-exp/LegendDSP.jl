@@ -97,6 +97,7 @@ function make_fake_config_pd()
             :trap => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
             :zac  => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
             :cusp => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
+            :dplms => PropDict(:rt => 5.0u"µs", :ft => 3.0u"µs"),
         ),
 
         :kwargs_pars => PropDict(
