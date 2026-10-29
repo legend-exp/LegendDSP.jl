@@ -101,6 +101,31 @@ end
     end
 end
 
+@testset "dsp_icpc_compressed e_dplms" begin
+    data   = make_fake_data(3)
+    config = make_fake_config()
+    τ      = 500u"µs"
+    bl = signalstats.(data.waveform_presummed, leftendpoint(config.bl_window), rightendpoint(config.bl_window))
+    wvfs_pz = InvCRFilter(τ).(shift_waveform.(data.waveform_presummed, -bl.mean))
+    se = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
+
+    # without DPLMS parameters: the trapezoid of flt_defaults.dplms read out like e_trap
+    result = dsp_icpc_compressed(data, config, τ, PropDict())
+    @test all(isfinite, result.e_dplms) && all(isfinite, result.e_dplms_max)
+    @test result.e_dplms ≈ se.(TrapezoidalChargeFilter(5.0u"µs", 3.0u"µs").(wvfs_pz), result.t50_pre .+ 6.5u"µs") rtol = 1e-6
+
+    # stored filter read out at t50_pre + t_pickoff
+    coefficients = fill(1 / 64, 64)
+    stored = PropDict(:dplms => PropDict(:coefficients => coefficients, :t_pickoff => 2.0u"µs"))
+    r_stored = dsp_icpc_compressed(data, config, τ, stored)
+    expected = dsp_dplms_energy(wvfs_pz, coefficients, r_stored.t50_pre, 2.0u"µs", config.current_window, se)
+    @test r_stored.e_dplms ≈ expected.e rtol = 1e-6
+    @test r_stored.e_dplms_max ≈ expected.emax rtol = 1e-6
+
+    too_long = PropDict(:dplms => PropDict(:coefficients => ones(10_000), :t_pickoff => 1.0u"µs"))
+    @test_throws "10000 DPLMS coefficients do not fit into waveforms of 8192 samples" dsp_icpc_compressed(data, config, τ, too_long)
+end
+
 @testset "dsp_icpc" begin
     data = make_fake_uncompressed_data(3)
     config = make_fake_config()

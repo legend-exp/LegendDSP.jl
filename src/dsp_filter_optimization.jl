@@ -705,6 +705,8 @@ maximum of the filter output inside `current_window`.
 function dsp_dplms_energy(wvfs::ArrayOfRDWaveforms, coeffs::AbstractVector, t50::AbstractVector, t_pickoff, current_window::ClosedInterval, signal_estimator::SignalEstimator)
     axes(wvfs) == axes(t50) || throw(DimensionMismatch("waveforms $(axes(wvfs)) and t50 times $(axes(t50)) differ"))
     wvfs = decode_data(wvfs)
+    n_wvf = minimum(length, wvfs.signal)
+    length(coeffs) <= n_wvf || throw(ArgumentError("$(length(coeffs)) DPLMS coefficients do not fit into waveforms of $n_wvf samples"))
     wvfs_flt = ConvolutionFilter(DirectConvolution(), coeffs).(wvfs)
     emax = get_wvf_maximum.(wvfs_flt, leftendpoint(current_window), rightendpoint(current_window))
     (e = signal_estimator.(wvfs_flt, t50 .+ t_pickoff), emax = [a.max for a in emax])
