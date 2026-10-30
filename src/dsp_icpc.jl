@@ -305,7 +305,7 @@ The output data is a table with the following columns:
 - `e_cusp`: energy of waveform with CUSP filter of optimized rise and flat-top time
 - `e_zac`: energy of waveform with ZAC filter of optimized rise and flat-top time
 - `e_dplms`: energy of waveform with the optimized DPLMS filter (`pars_filter.dplms`), or the trapezoidal filter of `flt_defaults.dplms` if there is none, read out at `t50_pre + t_pickoff`
-- `e_dplms_max`: maximum of the DPLMS filter output inside the current window
+- `e_dplms_max`: maximum of the DPLMS filter output inside the current window shifted by `t_pickoff`
 - `qdrift`: Q-drift parameter
 - `lq80_<early><gap><late>`, `lq90_…`, `lqamax_…`: LQ parameters from `t80`, `t90` and `t_amax`, charge in the late window minus charge in the early window, one column per `[early, gap, late]` of `lq_windows` in the config (lengths in 0.1 µs, e.g. `lq80_250025`: 2.5 µs early, no gap, 2.5 µs late)
 - `blfc`: baseline from FADC
