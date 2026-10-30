@@ -246,6 +246,11 @@ end
     wvfs_pz = InvCRFilter(τ).(shift_waveform.(wvfs, -bl.mean))
     e_101010 = extremestats.(TrapezoidalChargeFilter(10u"µs", 10u"µs").(wvfs_pz)).max
     @test res.t50 == get_threshold(wvfs_pz, e_101010 .* 0.5; mintot = config.kwargs_pars.tx_mintot)
+    # the filter-optimization QC sees the same t50 as t50_pre, so a QC condition on t50_pre
+    # guarantees that DPLMS accepts the events
+    qc = dsp_qc_flt_optimization_compressed(wvfs, config, τ, missing)
+    @test qc.t50_pre == res.t50
+    @test qc.blsigma == bl.sigma
     # widenings beyond n_post leave no flat region in the 81-sample window
     @test length(res.flat_top) == length(res.shaping_time) == g
     @test res.flat_top[1] > 0u"ns" && all(>=(0u"ns"), res.flat_top) && all(>(0u"ns"), res.shaping_time)

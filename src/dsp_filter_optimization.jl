@@ -5,6 +5,7 @@
 
 Get QC DSP for filter parameter optimization for a given waveform set.
 If f_evaluate_qc is missing, skips expensive ML classification and sets qc_label=-1.
+Columns as for [`dsp_qc_flt_optimization_compressed`](@ref).
 """
 function dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function)
     _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier, f_evaluate_qc))
@@ -19,6 +20,10 @@ export dsp_qc_flt_optimization
 
 Get QC DSP for filter parameter optimization for a given waveform set.
 If f_evaluate_qc is missing, skips expensive ML classification and sets qc_label=-1.
+
+Columns: `energy` (default trapezoid), `blmean`, `blsigma`, `blslope`, `t50` (half of the
+waveform maximum), `t50_pre` (half of the 10 µs rise, 10 µs flat-top trapezoid maximum, the `t50`
+of `dsp_dplms_optimization`) and `qc_label`.
 """
 function dsp_qc_flt_optimization_compressed(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real}, f_evaluate_qc::Function) 
     _get_dsp_qc_flt_optimization(wvfs, config, τ, Base.Fix2(get_qc_classifier_compressed, f_evaluate_qc))
@@ -48,6 +53,10 @@ function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfi
     # t50 determination
     t50 = get_threshold(wvfs, maximum.(wvfs.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
 
+    # half of the current integral, as t50_pre in dsp_icpc_compressed and t50 in dsp_dplms_optimization
+    e_101010 = extremestats.(TrapezoidalChargeFilter(10u"µs", 10u"µs").(wvfs)).max
+    t50_pre = get_threshold(wvfs, e_101010 .* 0.5; mintot = config.kwargs_pars.tx_mintot)
+
     # get QC classifier labels (skip expensive Haar filtering if no ML model)
     qc_labels = isnothing(get_qc) ? fill(-1, length(wvfs)) : Int.(get_qc(wvfs))
 
@@ -61,8 +70,8 @@ function _get_dsp_qc_flt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfi
 
     return TypedTables.Table(
                 energy = e_rtft, 
-                blmean = bl_stats.mean, blslope = bl_stats.slope, 
-                t50 = t50,
+                blmean = bl_stats.mean, blsigma = bl_stats.sigma, blslope = bl_stats.slope,
+                t50 = t50, t50_pre = t50_pre,
                 qc_label = qc_labels
             )
 end
