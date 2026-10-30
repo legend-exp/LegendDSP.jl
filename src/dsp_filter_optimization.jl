@@ -700,7 +700,8 @@ export dplms_default_grid
 
 Apply the DPLMS filter `coeffs` to baseline-subtracted, pole-zero-corrected waveforms and read
 the energy at `t50 + t_pickoff` with `signal_estimator`. Returns `(e, emax)` with `emax` the
-maximum of the filter output inside `current_window`.
+maximum of the filter output inside `current_window` shifted by `t_pickoff`, where the read-out
+times of all events with `t50` inside `current_window` lie.
 """
 function dsp_dplms_energy(wvfs::ArrayOfRDWaveforms, coeffs::AbstractVector, t50::AbstractVector, t_pickoff, current_window::ClosedInterval, signal_estimator::SignalEstimator)
     axes(wvfs) == axes(t50) || throw(DimensionMismatch("waveforms $(axes(wvfs)) and t50 times $(axes(t50)) differ"))
@@ -708,7 +709,7 @@ function dsp_dplms_energy(wvfs::ArrayOfRDWaveforms, coeffs::AbstractVector, t50:
     n_wvf = minimum(length, wvfs.signal)
     length(coeffs) <= n_wvf || throw(ArgumentError("$(length(coeffs)) DPLMS coefficients do not fit into waveforms of $n_wvf samples"))
     wvfs_flt = ConvolutionFilter(DirectConvolution(), coeffs).(wvfs)
-    emax = get_wvf_maximum.(wvfs_flt, leftendpoint(current_window), rightendpoint(current_window))
+    emax = get_wvf_maximum.(wvfs_flt, leftendpoint(current_window) + t_pickoff, rightendpoint(current_window) + t_pickoff)
     (e = signal_estimator.(wvfs_flt, t50 .+ t_pickoff), emax = [a.max for a in emax])
 end
 export dsp_dplms_energy

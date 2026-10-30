@@ -311,14 +311,18 @@ end
     rng = MersenneTwister(3)
     wvfs = ArrayOfRDWaveforms([make_dplms_waveform(rng) for _ in 1:50])
     config = make_fake_config()
-    res = dsp_dplms_optimization(wvfs, config, 400.0u"µs", collect(1.0:50.0); n_pre = 40, n_post = 40, n_bins = 1,
-        grid = [(nm = 1.0, za = 0.0, ft = 0.0, ct = 0.0, ff = 1)])
+    # a flat-topped filter whose read-out time t50 + t_pickoff lies after the end of the current window
+    res = dsp_dplms_optimization(wvfs, config, 400.0u"µs", collect(1.0:50.0); n_pre = 100, n_post = 140, n_bins = 1,
+        grid = n -> dplms_default_grid(n)[1:1])
+    @test all(>(rightendpoint(config.current_window)), res.t50 .+ res.t_pickoff)
     bl = signalstats.(wvfs, 0.0u"µs", 39.0u"µs")
     wvfs_pz = InvCRFilter(400.0u"µs").(shift_waveform.(wvfs, -bl.mean))
     se = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
     e = dsp_dplms_energy(wvfs_pz, res.coeffs[1], res.t50, res.t_pickoff, config.current_window, se)
     @test e.e ≈ vec(res.e_grid[1, :])
     @test e.emax ≈ vec(res.emax_grid[1, :])
+    # the maximum is the flat top around the read-out time
+    @test all(e.emax .>= 0.999 .* e.e) && median(e.emax ./ e.e) < 1.001
 end
 
 @testset "get_dplms_pars" begin
