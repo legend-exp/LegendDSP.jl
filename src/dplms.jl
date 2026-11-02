@@ -164,27 +164,34 @@ end
 export dplms_binned_reference
 
 """
-    dplms_synthesis(noise, ref, flattop, binned; nm, za, ft, ct = 0)
+    dplms_synthesis(noise, ref, flattop, binned; nm, za, ft, ct = 0, zo = 0)
 
 Solve the DPLMS system
 
-    (nm·noise + ref refᵀ + za·𝟙 + ft·flattop + ct·binned.mat) x = ref + ct·binned.vec
+    (nm·noise + ref refᵀ + za·𝟙 + ft·flattop + ct·binned.mat + zo·m mᵀ) x = ref + ct·binned.vec
 
 for the filter coefficients `x` along the window and rescale them so that `x ⋅ ref == 1`.
-`𝟙` is the all-ones matrix, so `za` penalizes the squared coefficient sum. Returns
+`𝟙` is the all-ones matrix, so `za` penalizes the squared coefficient sum. `m` is the window
+sample index relative to the window center, divided by the window length `n`, so `zo`
+penalizes `(mᵀx)²`. When the coefficients sum to zero, `mᵀx` is the area of the filter output
+for a unit step divided by `n`: with `za > 0`, `zo > 0` gives an output of zero area, as for a
+ZAC filter, and a linear baseline slope gives no output. Returns
 
 - `coeffs`: the impulse response, `reverse(x)`, for `ConvolutionFilter(DirectConvolution(), coeffs)`;
   the filter output at the last sample of a window equals `x ⋅ window`,
 - `noise_out`: `sqrt(xᵀ noise x)`, the predicted output noise in units of the reference amplitude,
-- `zero_area`: `sum(x)`.
+- `zero_area`: `sum(x)`,
+- `output_area`: `Σᵢ i·xᵢ`, the area in samples of the filter output for a unit step when
+  `zero_area` is zero.
 
-`nm`, `za`, `ft` and `ct` act only through their ratios: scaling all four by the same factor
-gives the same filter after normalization.
+`nm`, `za`, `ft`, `ct` and `zo` act only through their ratios: scaling all five by the same
+factor gives the same filter after normalization.
 """
-function dplms_synthesis(noise::AbstractMatrix, ref::AbstractVector, flattop::AbstractMatrix, binned; nm::Real, za::Real, ft::Real, ct::Real = 0)
+function dplms_synthesis(noise::AbstractMatrix, ref::AbstractVector, flattop::AbstractMatrix, binned; nm::Real, za::Real, ft::Real, ct::Real = 0, zo::Real = 0)
     n = length(ref)
     size(noise) == size(flattop) == (n, n) || throw(DimensionMismatch("noise $(size(noise)), flat-top $(size(flattop)) and reference length $n differ"))
-    M = nm .* noise .+ ref * ref' .+ za .+ ft .* flattop
+    m = ((1:n) .- (n + 1) / 2) ./ n
+    M = nm .* noise .+ ref * ref' .+ za .+ ft .* flattop .+ zo .* (m * m')
     v = collect(float.(ref))
     if !iszero(ct)
         size(binned.mat) == (n, n) && length(binned.vec) == n || throw(DimensionMismatch("binned reference $(size(binned.mat)), $(length(binned.vec)) does not match length $n"))
@@ -195,12 +202,12 @@ function dplms_synthesis(noise::AbstractMatrix, ref::AbstractVector, flattop::Ab
         Symmetric(M) \ v
     catch err
         err isa Union{LinearAlgebra.SingularException, LinearAlgebra.ZeroPivotException} || rethrow()
-        throw(ArgumentError("DPLMS system is singular for nm=$nm, za=$za, ft=$ft, ct=$ct"))
+        throw(ArgumentError("DPLMS system is singular for nm=$nm, za=$za, ft=$ft, ct=$ct, zo=$zo"))
     end
     d = dot(x, ref)
-    iszero(d) && throw(ArgumentError("DPLMS solution has zero response to the reference for nm=$nm, za=$za, ft=$ft, ct=$ct"))
+    iszero(d) && throw(ArgumentError("DPLMS solution has zero response to the reference for nm=$nm, za=$za, ft=$ft, ct=$ct, zo=$zo"))
     x ./= d
-    all(isfinite, x) || throw(ArgumentError("DPLMS solution is not finite for nm=$nm, za=$za, ft=$ft, ct=$ct"))
-    (coeffs = reverse(x), noise_out = sqrt(dot(x, noise, x)), zero_area = sum(x))
+    all(isfinite, x) || throw(ArgumentError("DPLMS solution is not finite for nm=$nm, za=$za, ft=$ft, ct=$ct, zo=$zo"))
+    (coeffs = reverse(x), noise_out = sqrt(dot(x, noise, x)), zero_area = sum(x), output_area = dot(1:n, x))
 end
 export dplms_synthesis

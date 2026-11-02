@@ -693,15 +693,17 @@ end
 export dsp_mwa_optimization_compressed
 
 """
-    dplms_default_grid(n_rise::Integer; nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, ff_factors = 1:4)
+    dplms_default_grid(n_rise::Integer; nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, zo = (0.0, 1e3), ff_factors = 1:4)
 
-DPLMS grid of flat-top widenings `ff = k·n_rise` samples for `k` in `ff_factors`, all at the
-weights `nm`, `za`, `ft`, `ct` in units of the reference amplitude. Only weight ratios matter,
-and in these units any `za` above about 1 already enforces zero area; `za = 0` switches the
-zero-area condition off.
+DPLMS grid of flat-top widenings `ff = k·n_rise` samples for `k` in `ff_factors`, for every
+output-area weight in `zo` (a number or a collection), all at the weights `nm`, `za`, `ft`,
+`ct` in units of the reference amplitude. Grid points are ordered by `zo`, then by `ff`. Only
+weight ratios matter, and in these units any `za` above about 1 already enforces zero area;
+`za = 0` switches the zero-area condition off. `zo = 0` leaves the area of the filter output
+free, `zo = 1e3` makes it zero.
 """
-dplms_default_grid(n_rise::Integer; nm::Real = 1.0, za::Real = 1e3, ft::Real = 1.0, ct::Real = 0.0, ff_factors = 1:4) =
-    [(nm = float(nm), za = float(za), ft = float(ft), ct = float(ct), ff = round(Int, k * n_rise)) for k in ff_factors]
+dplms_default_grid(n_rise::Integer; nm::Real = 1.0, za::Real = 1e3, ft::Real = 1.0, ct::Real = 0.0, zo = (0.0, 1e3), ff_factors = 1:4) =
+    [(nm = float(nm), za = float(za), ft = float(ft), ct = float(ct), zo = float(z), ff = round(Int, k * n_rise)) for z in zo for k in ff_factors]
 export dplms_default_grid
 
 """
@@ -728,8 +730,8 @@ export dsp_dplms_energy
         n_pre = nothing, n_post = nothing, n_noise_windows = 8, ff_level = 0.999, n_bins = 5, plateau_length = 20, flat_tol = 1e-3, grid = dplms_default_grid)
 
 Synthesize DPLMS energy filters on presummed waveforms for every point of `grid` and return the
-energies they give. A grid point is a `NamedTuple` with the weights `nm`, `za`, `ft`, `ct` and
-the flat-top widening `ff` in samples.
+energies they give. A grid point is a `NamedTuple` with the weights `nm`, `za`, `ft`, `ct`, `zo`
+and the flat-top widening `ff` in samples.
 
 Steps: baseline subtraction over `config.bl_window`; pole-zero correction with `InvCRFilter(τ)`;
 `t50`, the time where half of the current integral is reached: 50 % of the 10/10 µs trapezoid
@@ -753,7 +755,7 @@ penalizes the output slope of every drift-bin reference shifted by up to `ff` sa
 output stays flat while any of these shapes moves by `ff` samples. `n_rise` is the number of
 samples after the alignment point until the slowest drift-bin reference reaches `ff_level` of
 the plateau. `grid` is either a vector of grid points or a function of `n_rise` returning one,
-e.g. `grid = n -> dplms_default_grid(n; za = 0)` for filters without the zero-area condition.
+e.g. `grid = n -> dplms_default_grid(n; za = 0, zo = 0)` for filters without the zero-area condition.
 
 `flat_top` and `shaping_time` describe each filter's output for the full-length drift-bin
 references. The flat top is the interval around the read-out time where every filtered
@@ -764,6 +766,7 @@ the first sample where the filtered superpulse exceeds `flat_tol` to the start o
 - `e_grid`, `emax_grid`: energies and filter-output maxima, size `(length(grid), length(wvfs))`
 - `coeffs`: impulse response per grid point; `t_pickoff`
 - `noise_out`, `zero_area`: predicted relative output noise and coefficient sum per grid point
+- `output_area`: area of the filter output for a unit step per grid point, in time units
 - `flat_top`, `shaping_time`: one time per grid point
 - `grid`, `ref`, `ref_bins` (one column per bin), `t50` (per event), `plateau`, `n_pre`, `n_post`, `n_rise`
 - `superpulse`: the aligned superpulse in units of the reference amplitude
@@ -834,14 +837,16 @@ function dsp_dplms_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ:
     coeffs    = Vector{Vector{Float64}}(undef, length(grid))
     noise_out = Vector{Float64}(undef, length(grid))
     zero_area = similar(noise_out)
+    output_area = Vector{typeof(float(Δt))}(undef, length(grid))
     for (g, w) in enumerate(grid)
-        s = dplms_synthesis(noise, ref, flattops[w.ff], binned; nm = w.nm, za = w.za, ft = w.ft, ct = w.ct)
+        s = dplms_synthesis(noise, ref, flattops[w.ff], binned; nm = w.nm, za = w.za, ft = w.ft, ct = w.ct, zo = w.zo)
         energies = dsp_dplms_energy(wvfs, s.coeffs, t50, t_pickoff, current_window, signal_estimator)
         e_grid[g, :]    = energies.e
         emax_grid[g, :] = energies.emax
         coeffs[g]    = s.coeffs
         noise_out[g] = s.noise_out
         zero_area[g] = s.zero_area
+        output_area[g] = s.output_area * Δt
     end
     response = [ConvolutionFilter(DirectConvolution(), c)(superpulse) for c in coeffs]
 
@@ -858,6 +863,6 @@ function dsp_dplms_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ:
     flat_top = [x.flat_top for x in shapes]
     shaping_time = [x.shaping_time for x in shapes]
 
-    (; e_grid, emax_grid, coeffs, t_pickoff, flat_top, shaping_time, noise_out, zero_area, grid, ref, ref_bins, t50, plateau, n_pre, n_post, n_rise, superpulse, superpulse_bins, response, noise, flattops)
+    (; e_grid, emax_grid, coeffs, t_pickoff, flat_top, shaping_time, noise_out, zero_area, output_area, grid, ref, ref_bins, t50, plateau, n_pre, n_post, n_rise, superpulse, superpulse_bins, response, noise, flattops)
 end
 export dsp_dplms_optimization

@@ -175,6 +175,16 @@ end
     z = dplms_synthesis(noise, ref, flattop, binned; nm = 1.0, za = 1e6, ft = 0.0)
     @test abs(z.zero_area) < 1e-4
     @test dot(reverse(z.coeffs), ref) ≈ 1.0
+    # output_area is the area of the convolution output for a unit step over the window
+    @test sum(cumsum(z.coeffs)) ≈ z.output_area
+    @test z.output_area > 1
+
+    # output-area penalty on top of zero area: the output for a unit step has zero area,
+    # at the price of more white noise
+    o = dplms_synthesis(noise, ref, flattop, binned; nm = 1.0, za = 1e6, ft = 0.0, zo = 1e6)
+    @test abs(o.zero_area) < 1e-4 && abs(o.output_area) < 1e-3
+    @test dot(reverse(o.coeffs), ref) ≈ 1.0
+    @test o.noise_out > z.noise_out
 
     # the ConvolutionFilter reads the window energy at the window end
     Δt = 128.0u"ns"
@@ -263,9 +273,13 @@ end
     @test all(F ≈ F' for F in values(res.flattops))
     # the w = 3 logistic reaches 0.999 of its plateau 21 samples after its center
     @test res.n_rise in 20:22
-    @test [w.ff for w in res.grid] == res.n_rise .* (1:4)
+    @test [(w.zo, w.ff) for w in res.grid] == [(zo, res.n_rise * k) for zo in (0.0, 1e3) for k in 1:4]
+    # zo = 1e3 makes the area of the filter output zero; with zo = 0 the output stays positive
+    @test length(res.output_area) == g
+    @test all(abs(a) < 1u"ns" for (w, a) in zip(res.grid, res.output_area) if w.zo > 0)
+    @test all(a > 1u"µs" for (w, a) in zip(res.grid, res.output_area) if w.zo == 0)
     r_noza = dsp_dplms_optimization(wvfs, config, τ, widths; n_pre = 40, n_post = 40, n_bins = 2,
-        grid = n -> dplms_default_grid(n; za = 0.0, ff_factors = (1, 1.5)))
+        grid = n -> dplms_default_grid(n; za = 0.0, zo = 0.0, ff_factors = (1, 1.5)))
     @test all(w.za == 0 for w in r_noza.grid) && [w.ff for w in r_noza.grid] == round.(Int, r_noza.n_rise .* [1, 1.5])
     @test_throws "never reaches" dsp_dplms_optimization(wvfs, config, τ, widths; n_pre = 40, n_post = 40, n_bins = 2, ff_level = 2.0)
     se = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
@@ -274,7 +288,7 @@ end
     @test se(res.response[1], t_target + res.t_pickoff) ≈ 1.0 atol = 0.05
     # noise_out predicts the output spread of the filter on pure noise of the training σ
     r0 = dsp_dplms_optimization(wvfs, config, τ, widths; n_pre = 40, n_post = 40, n_bins = 2,
-        grid = [(nm = 1.0, za = 0.0, ft = 0.0, ct = 0.0, ff = 1)])
+        grid = [(nm = 1.0, za = 0.0, ft = 0.0, ct = 0.0, zo = 0.0, ff = 1)])
     noise_wvfs = ArrayOfRDWaveforms([RDWaveform((0:1023) .* 128.0u"ns", 5.0 .* randn(rng, 1024)) for _ in 1:200])
     flt_noise = ConvolutionFilter(DirectConvolution(), r0.coeffs[1]).(noise_wvfs)
     # dplms_noise_matrix underestimates the lowest-frequency noise power because the training
@@ -283,7 +297,7 @@ end
     @test std(reduce(vcat, flt_noise.signal)) ≈ r0.noise_out[1] * r0.plateau rtol = 0.15
     # a ct > 0 grid point runs and stays finite
     res_ct = dsp_dplms_optimization(wvfs, config, τ, widths; n_pre = 40, n_post = 40, n_bins = 2,
-        grid = [(nm = 1.0, za = 0.0, ft = 0.0, ct = 1e2, ff = 1)])
+        grid = [(nm = 1.0, za = 0.0, ft = 0.0, ct = 1e2, zo = 0.0, ff = 1)])
     @test all(isfinite, res_ct.e_grid)
     # drift vector of the wrong length fails
     @test_throws DimensionMismatch dsp_dplms_optimization(wvfs, config, τ, [1.0, 2.0]; n_pre = 40, n_post = 40)
@@ -300,15 +314,18 @@ end
     config = make_fake_config()
     Δt = 128.0u"ns"
     n_bl = round(Int, config.bl_window.right / Δt) - round(Int, config.bl_window.left / Δt) + 1
-    grid = [(nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, ff = ff) for ff in (1, 3)]
+    grid = [(nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, zo = 0.0, ff = ff) for ff in (1, 3)]
     res = dsp_dplms_optimization(wvfs, config, 400.0u"µs", widths; n_bins = 2, grid)
     @test res.n_pre == res.n_post == (n_bl - 8) ÷ 2
     @test all(length.(res.coeffs) .== 2 * res.n_pre + 1)
     @test all(isfinite, res.e_grid)
     @test res.t_pickoff == res.n_post * Δt
-    # wider flat-top terms give longer flat tops and shorter shaping times
+    # wider flat-top terms give longer flat tops and shorter shaping times; with zero output
+    # area the negative lobes need room in the window, so this holds for zo = 0 only
     r_ff = dsp_dplms_optimization(wvfs, config, 400.0u"µs", widths; n_bins = 2)
-    @test all(>(0u"ns"), r_ff.flat_top) && issorted(r_ff.flat_top) && issorted(r_ff.shaping_time; rev = true)
+    @test all(>(0u"ns"), r_ff.flat_top)
+    idxs = findall(w -> w.zo == 0, r_ff.grid)
+    @test length(idxs) == 4 && issorted(r_ff.flat_top[idxs]) && issorted(r_ff.shaping_time[idxs]; rev = true)
     @test_throws ArgumentError dsp_dplms_optimization(wvfs, config, 400.0u"µs", widths; n_pre = 200, n_post = 200, grid)
 end
 
