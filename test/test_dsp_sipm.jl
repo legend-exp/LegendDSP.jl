@@ -65,16 +65,48 @@ function make_sipm_config()
                 :min_tot_intersect => 48.0u"ns",
                 :max_tot_intersect => 250.0u"ns",
             ),
+            :mwa => PropDict(
+                :wl_trigger        => 160.0u"ns",
+                :passes            => 4,
+                :n_σ_threshold     => 3.0,
+                :min_threshold     => -1.0,
+                :max_threshold     => 1.0,
+                :solve_overlap     => true,
+                :merge_distance    => 0.25,
+            ),
         ),
+    )
+end
+
+make_sipm_pars() = PropDict(:sg => PropDict(:wl => 200.0u"ns"), :mwa => PropDict(:wl => 800.0u"ns"))
+
+# one photon = an exponential pulse of height A and decay ratio r per sample; its exact inverse kernel is
+# y[i] = (x[i] - r x[i-1]) / A, i.e. the taps (lag -1, 0, +1) = (0, 1/A, -r/A), which turns it into a unit stick
+const PHOTON_A, PHOTON_R = 8.0, exp(-1 / 40)
+photon_pulse(n, i0) = [i < i0 ? 0.0 : PHOTON_A * PHOTON_R^(i - i0) for i in 1:n]
+make_sipm_kernel_pars() = PropDict(:kernel => PropDict(:dt => 16.0u"ns", :taps => [0.0, 1 / PHOTON_A, -PHOTON_R / PHOTON_A]))
+
+# photons at 50 µs (one), 52 µs (two, 300 ns apart) on the odd rows, noise only on the even rows
+function make_photon_data(N = 10)
+    rng = MersenneTwister(2)
+    n = 6250
+    t = range(0f0u"ns", step = 16f0u"ns", length = n)
+    i1 = round(Int, 50e3 / 16)
+    i2 = round(Int, 52e3 / 16)
+    signals = reduce(hcat, [(isodd(k) ? photon_pulse(n, i1) .+ photon_pulse(n, i2) .+ photon_pulse(n, i2 + 19) : zeros(n)) .+ 0.05 .* randn(rng, n) for k in 1:N])
+    Table(
+        waveform    = ArrayOfRDWaveforms((fill(t, N), VectorOfSimilarVectors(signals))),
+        baseline    = fill(0.0f0, N),
+        timestamp   = fill(UInt64(0), N),
+        eventnumber = UInt32.(1:N),
+        daqenergy   = fill(UInt16(0), N),
     )
 end
 
 @testset "dsp_sipm" begin
     data = make_sipm_data()
     config = make_sipm_config()
-    pars_opt = PropDict(:sg => PropDict(:wl => 200.0u"ns"))
-
-    result = dsp_sipm(data, config, pars_opt)
+    result = dsp_sipm(data, config, make_sipm_pars())
 
     # check that result is a Table with the right number of rows
     @test result isa TypedTables.Table
@@ -90,7 +122,8 @@ end
         :trig_pos_sg, :trig_max_sg, :trig_pos_DC_sg, :trig_max_DC_sg,
         :threshold_trap, :threshold_DC_trap,
         :trig_pos_trap, :trig_pos_high_trap, :trig_pos_tot_trap, :trig_max_trap,
-        :trig_pos_DC_trap, :trig_pos_high_DC_trap, :trig_pos_tot_DC_trap, :trig_max_DC_trap]
+        :trig_pos_DC_trap, :trig_pos_high_DC_trap, :trig_pos_tot_DC_trap, :trig_max_DC_trap,
+        :threshold_mwa, :trig_pos_mwa, :trig_pos_tot_mwa, :trig_max_mwa]
     for k in expected_keys
         @test hasproperty(result, k)
     end
@@ -129,7 +162,7 @@ end
 @testset "dsp_sipm baseline window" begin
     data = make_mixed_sipm_data()
     config = make_sipm_config()
-    result = dsp_sipm(data, config, PropDict(:sg => PropDict(:wl => 200.0u"ns")))
+    result = dsp_sipm(data, config, make_sipm_pars())
 
     has_trig = .!isempty.(result.trig_pos_sg)
     @test any(has_trig) && !all(has_trig)
@@ -151,3 +184,49 @@ end
 # bit-drop compressed waveform data (waveform_bit_drop) decoded via
 # LegendDataTypes.decode_data, which is hard to mock with synthetic data.
 # The DSP logic is identical to dsp_sipm.
+
+@testset "dsp_sipm MWA chain" begin
+    data = make_photon_data()
+    config = make_sipm_config()
+    has_pulse = isodd.(1:length(data))
+    pars = merge(make_sipm_pars(), make_sipm_kernel_pars())
+
+    # matrix method: sites on the 160-ns trace, amplitudes solved on the 800-ns trace; the two photons 300 ns apart
+    # overlap on the 800-ns trace and are separated by the solve
+    result = dsp_sipm(data, config, pars)
+    for i in findall(has_pulse)
+        big = findall(>(0.5), result.trig_max_mwa[i])
+        @test length(big) == 3
+        @test result.trig_max_mwa[i][big] ≈ [1.0, 1.0, 1.0] atol = 0.1
+        @test result.trig_pos_mwa[i][big[1]] ≈ 50.0u"µs" atol = 0.1u"µs"
+        @test all(result.trig_pos_tot_mwa[i][big] .> 0.0u"ns")
+    end
+    for i in findall(.!has_pulse)
+        @test all(abs.(result.trig_max_mwa[i]) .< 0.3)
+    end
+    @test eltype(eltype(result.trig_pos_mwa)) == eltype(first(data.waveform).time)
+
+    # without the matrix method the sites are the extrema of the 800-ns trace: the close pair is one site of about two photons
+    config_nosolve = deepcopy(config)
+    config_nosolve.filters.mwa.solve_overlap = false
+    result_ns = dsp_sipm(data, config_nosolve, pars)
+    for i in findall(has_pulse)
+        big = findall(>(0.5), result_ns.trig_max_mwa[i])
+        @test length(big) == 2
+        @test result_ns.trig_max_mwa[i][big[1]] ≈ 1.0 atol = 0.1
+        @test result_ns.trig_max_mwa[i][big[2]] > 1.5
+    end
+
+    # without template pars the derivative takes the place of the kernel: same columns, amplitudes in ADC
+    result_nk = dsp_sipm(data, config, make_sipm_pars())
+    @test propertynames(result_nk) == propertynames(result)
+    @test all(!isempty(result_nk.trig_pos_mwa[i]) for i in findall(has_pulse))
+
+    # the MWA chain needs an even number of passes and the kernel sampling must match the waveforms
+    config_odd = deepcopy(config)
+    config_odd.filters.mwa.passes = 3
+    @test_throws ArgumentError dsp_sipm(data, config_odd, pars)
+    pars_dt = deepcopy(pars)
+    pars_dt.kernel.dt = 8.0u"ns"
+    @test_throws ArgumentError dsp_sipm(data, config, pars_dt)
+end

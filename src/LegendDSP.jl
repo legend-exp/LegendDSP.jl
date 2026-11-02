@@ -8,12 +8,14 @@ Template for Julia packages.
 module LegendDSP
 
 using LinearAlgebra
+using LinearAlgebra: lu, issuccess
 using Random
 using Statistics
 
 using ArgCheck
 using ArraysOfArrays
 using DocStringExtensions
+using FFTW: rfft, irfft
 using FillArrays
 using IntervalSets
 using RadiationDetectorDSP
@@ -44,8 +46,11 @@ include("dsp_icpc.jl")
 include("saturation.jl")
 include("interpolation.jl")
 include("intersect_maximum.jl")
+include("centered_convolution.jl")
+include("sipm_sites.jl")
 include("dsp_sipm.jl")
 include("dsp_sipm_optimization.jl")
+include("dsp_sipm_template.jl")
 include("dsp_pmts.jl")
 include("dsp_routines.jl")
 include("dsp_aux.jl")
