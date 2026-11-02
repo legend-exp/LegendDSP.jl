@@ -1,9 +1,16 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict)
+    dsp_sipm(data::Q, config::PropDict, pars::PropDict)
 
-DSP routine for SiPM data. It needs the threshold parameters from the threshold scan for the given SiPM channel as well as the discharge threshold parameters.
+DSP routine for SiPM data. `pars` carries the shaping lengths of the optimisation (`sg.wl`, `mwa.wl`) and, when the
+template step has run for the channel, its inverse `kernel` (`taps`, `dt`). The MWA chain (`config.filters.mwa`:
+`wl_trigger`, `passes`, `n_σ_threshold`, `min_threshold`, `max_threshold`, `solve_overlap`, `merge_distance`) sends
+the waveform through the kernel (the derivative without it), shapes it with `passes` moving averages of the trigger
+length and of the energy length `mwa.wl`, both scaled so that a unit stick (one photon) has peak 1, and finds the
+sites. With `solve_overlap` the sites are the extrema of the trigger trace and their amplitudes are solved on the
+energy trace (matrix method); without it, sites and amplitudes are the extrema of the energy trace. Sites within
+`2 passes` times the longer shaping length of either trace end are dropped.
 
 # Input data
 The input data is a table with the following columns:
@@ -43,8 +50,13 @@ The output data is a table with the following columns:
 - `trig_pos_high_DC_trap`: trap discharge trigger high positions
 - `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
 - `trig_max_DC_trap`: trap discharge trigger maxima
+## MWA filter columns
+- `threshold_mwa`: MAD-σ of the site trace (the trigger trace with the matrix method, the energy trace without)
+- `trig_pos_mwa`: site positions, every local maximum above `n_σ_threshold` σ and minimum below its negative
+- `trig_pos_tot_mwa`: time over threshold of the excursion a site lies in
+- `trig_max_mwa`: site amplitudes on the energy shaping, signed; solved for the overlap with the matrix method
 """
-function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
+function dsp_sipm(data::Q, config::PropDict, pars::PropDict) where {Q <: Table}
     # common config
     sg_flt_degree         = config.sg_flt_degree
     t0_hpge_window        = config.t0_hpge_window
@@ -74,8 +86,21 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     trap_max_dc_threshold  = trap_config.max_dc_threshold
     trap_n_σ_dc_threshold  = trap_config.n_σ_dc_threshold
 
-    # unpack optimization parameters
-    sg_window_length = pars_optimization.sg.wl
+    # get MWA config parameters
+    mwa_config = config.filters.mwa
+    mwa_wl_trigger         = mwa_config.wl_trigger
+    mwa_passes             = mwa_config.passes
+    mwa_n_σ_threshold      = mwa_config.n_σ_threshold
+    mwa_min_threshold      = mwa_config.min_threshold
+    mwa_max_threshold      = mwa_config.max_threshold
+    mwa_solve_overlap      = mwa_config.solve_overlap
+    mwa_merge_distance     = mwa_config.merge_distance
+    iseven(mwa_passes) || throw(ArgumentError("The MWA chain needs an even number of passes to stay centred, got $mwa_passes"))
+
+    # unpack optimization parameters and, if the template step has run, the inverse kernel
+    sg_window_length = pars.sg.wl
+    mwa_wl_energy    = pars.mwa.wl
+    has_kernel       = haskey(pars, :kernel)
 
     # get waveform data
     data = decode_data(data)
@@ -141,6 +166,48 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     inters_thres_DC_trap = thresholdstats_mad.(wvfs_int_flip, trap_min_dc_threshold, trap_max_dc_threshold)
     inters_DC_trap = intflt_sg.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
 
+    # === MWA pipeline ===
+    # photon trace: the baseline-subtracted waveform through the inverse kernel of the template step; a channel without
+    # template pars takes the derivative (kernel [1, -1]) instead
+    t_axis = first(wvfs).time
+    dt = step(t_axis)
+    !has_kernel || pars.kernel.dt ≈ dt || throw(ArgumentError("The kernel taps are sampled at $(pars.kernel.dt), the waveforms at $dt"))
+    photon_filter = CenteredConvolutionFilter(has_kernel ? Float64.(pars.kernel.taps) : [0.0, 1.0, -1.0])
+    wvfs_bl = shift_waveform.(wvfs, [-median(wf.signal) for wf in wvfs])
+    wvfs_photons = photon_filter.(wvfs_bl)
+
+    # short (trigger) and long (energy) shaping, each scaled so that a unit stick (one photon after the kernel) has peak 1
+    mwa_trigger_filter = MovingWindowMultiFilter(mwa_wl_trigger; passes = mwa_passes)
+    mwa_energy_filter  = MovingWindowMultiFilter(mwa_wl_energy; passes = mwa_passes)
+    stick = RDWaveform(t_axis, [i == length(t_axis) ÷ 2 ? 1.0 : 0.0 for i in eachindex(t_axis)])
+    response_trigger = mwa_trigger_filter(stick).signal
+    response_energy  = mwa_energy_filter(stick).signal
+    wvfs_trigger = multiply_waveform.(mwa_trigger_filter.(wvfs_photons), 1 / maximum(response_trigger))
+    wvfs_energy  = multiply_waveform.(mwa_energy_filter.(wvfs_photons), 1 / maximum(response_energy))
+    wvfs_trigger = shift_waveform.(wvfs_trigger, [-median(wf.signal) for wf in wvfs_trigger])
+    wvfs_energy  = shift_waveform.(wvfs_energy, [-median(wf.signal) for wf in wvfs_energy])
+
+    # sites: the extrema beyond n σ of the trigger trace (matrix method) or of the energy trace
+    wvfs_sites = mwa_solve_overlap ? wvfs_trigger : wvfs_energy
+    mwa_thresholds = thresholdstats_mad.(wvfs_sites, mwa_min_threshold, mwa_max_threshold)
+    sites = extrema_over_threshold.(wvfs_sites, mwa_n_σ_threshold .* mwa_thresholds)
+
+    # matrix method: the amplitudes of all sites solved on the long shaping (otherwise the extrema of the energy trace)
+    if mwa_solve_overlap
+        solver = SiteSolver(response_energy ./ maximum(response_energy), argmax(response_energy), mwa_merge_distance * uconvert(NoUnits, mwa_wl_energy / dt))
+        sites = map(zip(wvfs_energy, sites)) do (wf, s)
+            sol = solver(wf.signal, uconvert.(NoUnits, (s.x .- first(t_axis)) ./ dt) .+ 1, uconvert.(NoUnits, s.x_tot ./ dt), Int.(sign.(s.max)))
+            (x = convert.(eltype(t_axis), first(t_axis) .+ (sol.pos .- 1) .* dt), x_tot = convert.(eltype(t_axis), sol.tot .* dt), max = sol.A)
+        end
+    end
+
+    # without the shaping transients at both ends of the trace
+    mwa_margin = 2 * mwa_passes * max(mwa_wl_trigger, mwa_wl_energy)
+    sites = map(sites) do s
+        k = findall(t -> first(t_axis) + mwa_margin <= t <= last(t_axis) - mwa_margin, s.x)
+        (x = s.x[k], x_tot = s.x_tot[k], max = s.max[k])
+    end
+
     # output Table 
     return TypedTables.Table(
         blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
@@ -157,7 +224,10 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
         trig_pos_trap = VectorOfVectors(inters_trap.x), trig_pos_high_trap = VectorOfVectors(inters_trap.x_high),
         trig_pos_tot_trap = VectorOfVectors(inters_trap.x_tot), trig_max_trap = VectorOfVectors(inters_trap.max),
         trig_pos_DC_trap = VectorOfVectors(inters_DC_trap.x), trig_pos_high_DC_trap = VectorOfVectors(inters_DC_trap.x_high),
-        trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max)
+        trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max),
+        # MWA triggers
+        threshold_mwa = mwa_thresholds, trig_pos_mwa = VectorOfVectors([s.x for s in sites]),
+        trig_pos_tot_mwa = VectorOfVectors([s.x_tot for s in sites]), trig_max_mwa = VectorOfVectors([s.max for s in sites])
     )
 end
 export dsp_sipm
@@ -165,13 +235,13 @@ export dsp_sipm
 
 
 """
-    dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict)
+    dsp_sipm_compressed(data::Q, config::PropDict, pars::PropDict)
 
-DSP routine for SiPM data. It needs the threshold parameters from the threshold scan for the given SiPM channel as well as the discharge threshold parameters.
+DSP routine for SiPM data, see `dsp_sipm`; reads `waveform_bit_drop`.
 
 # Input data
 The input data is a table with the following columns:
-- `waveform`: waveform data
+- `waveform_bit_drop`: bit-drop compressed waveform data
 - `baseline`: baseline data
 - `timestamp`: timestamp data
 - `eventnumber`: event number data
@@ -207,8 +277,13 @@ The output data is a table with the following columns:
 - `trig_pos_high_DC_trap`: trap discharge trigger high positions
 - `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
 - `trig_max_DC_trap`: trap discharge trigger maxima
+## MWA filter columns
+- `threshold_mwa`: MAD-σ of the site trace (the trigger trace with the matrix method, the energy trace without)
+- `trig_pos_mwa`: site positions, every local maximum above `n_σ_threshold` σ and minimum below its negative
+- `trig_pos_tot_mwa`: time over threshold of the excursion a site lies in
+- `trig_max_mwa`: site amplitudes on the energy shaping, signed; solved for the overlap with the matrix method
 """
-function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
+function dsp_sipm_compressed(data::Q, config::PropDict, pars::PropDict) where {Q <: Table}
     # common config
     sg_flt_degree         = config.sg_flt_degree
     t0_hpge_window        = config.t0_hpge_window
@@ -238,8 +313,21 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     trap_max_dc_threshold  = trap_config.max_dc_threshold
     trap_n_σ_dc_threshold  = trap_config.n_σ_dc_threshold
 
-    # unpack optimization parameters
-    sg_window_length = pars_optimization.sg.wl
+    # get MWA config parameters
+    mwa_config = config.filters.mwa
+    mwa_wl_trigger         = mwa_config.wl_trigger
+    mwa_passes             = mwa_config.passes
+    mwa_n_σ_threshold      = mwa_config.n_σ_threshold
+    mwa_min_threshold      = mwa_config.min_threshold
+    mwa_max_threshold      = mwa_config.max_threshold
+    mwa_solve_overlap      = mwa_config.solve_overlap
+    mwa_merge_distance     = mwa_config.merge_distance
+    iseven(mwa_passes) || throw(ArgumentError("The MWA chain needs an even number of passes to stay centred, got $mwa_passes"))
+
+    # unpack optimization parameters and, if the template step has run, the inverse kernel
+    sg_window_length = pars.sg.wl
+    mwa_wl_energy    = pars.mwa.wl
+    has_kernel       = haskey(pars, :kernel)
 
     # get waveform data
     data = decode_data(data)
@@ -305,6 +393,48 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     inters_thres_DC_trap = thresholdstats_mad.(wvfs_int_flip, trap_min_dc_threshold, trap_max_dc_threshold)
     inters_DC_trap = intflt_sg.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
 
+    # === MWA pipeline ===
+    # photon trace: the baseline-subtracted waveform through the inverse kernel of the template step; a channel without
+    # template pars takes the derivative (kernel [1, -1]) instead
+    t_axis = first(wvfs).time
+    dt = step(t_axis)
+    !has_kernel || pars.kernel.dt ≈ dt || throw(ArgumentError("The kernel taps are sampled at $(pars.kernel.dt), the waveforms at $dt"))
+    photon_filter = CenteredConvolutionFilter(has_kernel ? Float64.(pars.kernel.taps) : [0.0, 1.0, -1.0])
+    wvfs_bl = shift_waveform.(wvfs, [-median(wf.signal) for wf in wvfs])
+    wvfs_photons = photon_filter.(wvfs_bl)
+
+    # short (trigger) and long (energy) shaping, each scaled so that a unit stick (one photon after the kernel) has peak 1
+    mwa_trigger_filter = MovingWindowMultiFilter(mwa_wl_trigger; passes = mwa_passes)
+    mwa_energy_filter  = MovingWindowMultiFilter(mwa_wl_energy; passes = mwa_passes)
+    stick = RDWaveform(t_axis, [i == length(t_axis) ÷ 2 ? 1.0 : 0.0 for i in eachindex(t_axis)])
+    response_trigger = mwa_trigger_filter(stick).signal
+    response_energy  = mwa_energy_filter(stick).signal
+    wvfs_trigger = multiply_waveform.(mwa_trigger_filter.(wvfs_photons), 1 / maximum(response_trigger))
+    wvfs_energy  = multiply_waveform.(mwa_energy_filter.(wvfs_photons), 1 / maximum(response_energy))
+    wvfs_trigger = shift_waveform.(wvfs_trigger, [-median(wf.signal) for wf in wvfs_trigger])
+    wvfs_energy  = shift_waveform.(wvfs_energy, [-median(wf.signal) for wf in wvfs_energy])
+
+    # sites: the extrema beyond n σ of the trigger trace (matrix method) or of the energy trace
+    wvfs_sites = mwa_solve_overlap ? wvfs_trigger : wvfs_energy
+    mwa_thresholds = thresholdstats_mad.(wvfs_sites, mwa_min_threshold, mwa_max_threshold)
+    sites = extrema_over_threshold.(wvfs_sites, mwa_n_σ_threshold .* mwa_thresholds)
+
+    # matrix method: the amplitudes of all sites solved on the long shaping (otherwise the extrema of the energy trace)
+    if mwa_solve_overlap
+        solver = SiteSolver(response_energy ./ maximum(response_energy), argmax(response_energy), mwa_merge_distance * uconvert(NoUnits, mwa_wl_energy / dt))
+        sites = map(zip(wvfs_energy, sites)) do (wf, s)
+            sol = solver(wf.signal, uconvert.(NoUnits, (s.x .- first(t_axis)) ./ dt) .+ 1, uconvert.(NoUnits, s.x_tot ./ dt), Int.(sign.(s.max)))
+            (x = convert.(eltype(t_axis), first(t_axis) .+ (sol.pos .- 1) .* dt), x_tot = convert.(eltype(t_axis), sol.tot .* dt), max = sol.A)
+        end
+    end
+
+    # without the shaping transients at both ends of the trace
+    mwa_margin = 2 * mwa_passes * max(mwa_wl_trigger, mwa_wl_energy)
+    sites = map(sites) do s
+        k = findall(t -> first(t_axis) + mwa_margin <= t <= last(t_axis) - mwa_margin, s.x)
+        (x = s.x[k], x_tot = s.x_tot[k], max = s.max[k])
+    end
+
     # output Table 
     return TypedTables.Table(
         blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
@@ -321,7 +451,10 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
         trig_pos_trap = VectorOfVectors(inters_trap.x), trig_pos_high_trap = VectorOfVectors(inters_trap.x_high),
         trig_pos_tot_trap = VectorOfVectors(inters_trap.x_tot), trig_max_trap = VectorOfVectors(inters_trap.max),
         trig_pos_DC_trap = VectorOfVectors(inters_DC_trap.x), trig_pos_high_DC_trap = VectorOfVectors(inters_DC_trap.x_high),
-        trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max)
+        trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max),
+        # MWA triggers
+        threshold_mwa = mwa_thresholds, trig_pos_mwa = VectorOfVectors([s.x for s in sites]),
+        trig_pos_tot_mwa = VectorOfVectors([s.x_tot for s in sites]), trig_max_mwa = VectorOfVectors([s.max for s in sites])
     )
 end
 export dsp_sipm_compressed
