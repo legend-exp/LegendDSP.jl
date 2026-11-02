@@ -63,10 +63,12 @@
         :t0_hpge_window => [47.0u"µs", 53.0u"µs"],
         :sg_flt_degree  => 3,
         :filters => PropDict(:sg => sipm_filter(), :trap => sipm_filter(:rt => 100.0u"ns", :ft => 50.0u"ns", :pz_tau => 3.0u"µs"),
-                          :xt_tag => sipm_filter(:window_length => 500.0u"ns")),
+                          :xt_tag => sipm_filter(:window_length => 500.0u"ns"),
+                          :mwa => PropDict(:wl_trigger => 160.0u"ns", :passes => 4, :n_σ_threshold => 3.0, :min_threshold => -1.0,
+                                           :max_threshold => 1.0, :solve_overlap => true, :merge_distance => 0.25)),
     )
     sipm_sg_config = sipm_filter(:sg_flt_degree => 3)
-    sipm_pars = PropDict(:sg => PropDict(:wl => 200.0u"ns"))
+    sipm_pars = PropDict(:sg => PropDict(:wl => 200.0u"ns"), :mwa => PropDict(:wl => 800.0u"ns"))
     sipm_opt_config = PropDict(
         :e_grid_wl => [100.0u"ns", 200.0u"ns"],
         :threshold => PropDict(:min_cut => -1.0, :max_cut => 1.0, :n_wvfs => n_wvf),

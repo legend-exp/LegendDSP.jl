@@ -17,12 +17,14 @@ The package provides
 module LegendDSP
 
 using LinearAlgebra
+using LinearAlgebra: lu, issuccess
 using Random
 using Statistics
 
 using ArgCheck
 using ArraysOfArrays
 using DocStringExtensions
+using FFTW: rfft, irfft
 using FillArrays
 using IntervalSets
 using RadiationDetectorDSP
@@ -55,6 +57,8 @@ include("saturation.jl")
 include("interpolation.jl")
 include("dplms.jl")
 include("intersect_maximum.jl")
+include("centered_convolution.jl")
+include("sipm_sites.jl")
 include("dsp_sipm.jl")
 include("dsp_sipm_optimization.jl")
 include("dsp_sipm_template.jl")
