@@ -228,6 +228,13 @@ function make_dplms_waveform(rng; w = 2.0, amplitude = 1e4, τ = 400.0u"µs", σ
     RDWaveform(t, y .+ 1000.0)
 end
 
+@testset "dplms_default_grid" begin
+    @test [(w.zo, w.ff) for w in dplms_default_grid(7)] == [(zo, 7k) for zo in (0.0, 1e3) for k in 1:4]
+    # explicit sample counts replace the multiples of n_rise
+    grid = dplms_default_grid(7; zo = 0.0, ff = 2:2:6)
+    @test [w.ff for w in grid] == [2, 4, 6] && all(w -> w.zo == 0 && w.za == 1e3, grid)
+end
+
 @testset "dsp_dplms_optimization" begin
     rng = MersenneTwister(7)
     widths = [isodd(k) ? 2.0 : 3.0 for k in 1:300]
