@@ -693,17 +693,20 @@ end
 export dsp_mwa_optimization_compressed
 
 """
-    dplms_default_grid(n_rise::Integer; nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, zo = (0.0, 1e3), ff_factors = 1:4)
+    dplms_default_grid(n_rise::Integer; nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, zo = (0.0, 1e3), ff_factors = 1:4, ff = nothing)
 
-DPLMS grid of flat-top widenings `ff = k·n_rise` samples for `k` in `ff_factors`, for every
+DPLMS grid of flat-top widenings `ff = k·n_rise` samples for `k` in `ff_factors`, or of the
+sample counts `ff` if given, for every
 output-area weight in `zo` (a number or a collection), all at the weights `nm`, `za`, `ft`,
 `ct` in units of the reference amplitude. Grid points are ordered by `zo`, then by `ff`. Only
 weight ratios matter, and in these units any `za` above about 1 already enforces zero area;
 `za = 0` switches the zero-area condition off. `zo = 0` leaves the area of the filter output
 free, `zo = 1e3` makes it zero.
 """
-dplms_default_grid(n_rise::Integer; nm::Real = 1.0, za::Real = 1e3, ft::Real = 1.0, ct::Real = 0.0, zo = (0.0, 1e3), ff_factors = 1:4) =
-    [(nm = float(nm), za = float(za), ft = float(ft), ct = float(ct), zo = float(z), ff = round(Int, k * n_rise)) for z in zo for k in ff_factors]
+function dplms_default_grid(n_rise::Integer; nm::Real = 1.0, za::Real = 1e3, ft::Real = 1.0, ct::Real = 0.0, zo = (0.0, 1e3), ff_factors = 1:4, ff = nothing)
+    ffs = isnothing(ff) ? [round(Int, k * n_rise) for k in ff_factors] : ff
+    [(nm = float(nm), za = float(za), ft = float(ft), ct = float(ct), zo = float(z), ff = Int(f)) for z in zo for f in ffs]
+end
 export dplms_default_grid
 
 """
