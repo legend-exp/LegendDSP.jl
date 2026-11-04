@@ -99,12 +99,24 @@ end
     )
 
     @testset "prepare" begin
-        @test keys(prep) == (:wvfs_pz, :t50, :bl_stats, :signal_estimator, :sampling_period)
+        @test prep isa FltOptPrep
+        @test fieldnames(FltOptPrep) == (:wvfs_pz, :t50, :bl_stats, :signal_estimator, :sampling_period)
+        @test isconcretetype(typeof(prep))
         @test length(prep.wvfs_pz) == length(wvfs)
         @test prep.sampling_period == 16.0u"ns"
         # t50 is the 50% crossing of the linear rise, one µs after the onset
         @test all(abs.(ustrip.(u"µs", prep.t50) .- (onsets .+ 1.0)) .< 0.2)
         @test all(abs.(prep.bl_stats.mean .- 1000.0) .< 5.0)
+    end
+
+    @testset "rise-time scans: prepared and waveform methods agree" begin
+        for f_rt in (dsp_trap_rt_optimization, dsp_cusp_rt_optimization, dsp_zac_rt_optimization)
+            enc_prep = f_rt(prep, config; ft = 2.0u"µs")
+            enc_wvfs = f_rt(wvfs, config, τ; ft = 2.0u"µs")
+            @test size(enc_prep)[2] == length(wvfs)
+            @test all(isfinite, enc_prep)
+            @test isequal(enc_prep, enc_wvfs)
+        end
     end
 
     @testset "dsp_energy_rtft equals the matching grid row" begin

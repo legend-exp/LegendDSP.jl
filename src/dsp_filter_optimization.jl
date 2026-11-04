@@ -98,17 +98,42 @@ export dsp_qdrift_flt_optimization
 
 
 """
+    FltOptPrep
+
+Waveforms prepared once for repeated filter evaluations, created by
+[`dsp_flt_optimization_prepare`](@ref).
+
+# Fields
+- `wvfs_pz`: baseline-subtracted waveforms deconvolved with `InvCRFilter(τ)`
+- `t50`: time of 50% of the maximum of each waveform in `wvfs_pz`
+- `bl_stats`: baseline statistics over `config.bl_window`
+- `signal_estimator`: `SignalEstimator` used to read the filter output at the pickoff time
+- `sampling_period`: time step of the waveforms
+"""
+struct FltOptPrep{W, T, B, E, P<:Unitful.Time{<:Real}}
+    wvfs_pz::W
+    t50::T
+    bl_stats::B
+    signal_estimator::E
+    sampling_period::P
+
+    FltOptPrep{W,T,B,E,P}(wvfs_pz, t50, bl_stats, signal_estimator, sampling_period) where {W,T,B,E,P} =
+        new{W,T,B,E,P}(wvfs_pz, t50, bl_stats, signal_estimator, sampling_period)
+end
+
+FltOptPrep(wvfs_pz::W, t50::T, bl_stats::B, signal_estimator::E, sampling_period::P) where {W,T,B,E,P} =
+    FltOptPrep{W,T,B,E,P}(wvfs_pz, t50, bl_stats, signal_estimator, sampling_period)
+export FltOptPrep
+
+
+"""
     dsp_flt_optimization_prepare(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real})
 
 Baseline-subtract and pole-zero correct `wvfs` once for repeated filter evaluations.
 
 # Returns
-A `NamedTuple` with
-- `wvfs_pz`: baseline-subtracted waveforms deconvolved with `InvCRFilter(τ)`
-- `t50`: time of 50% of the maximum of each `wvfs_pz`
-- `bl_stats`: baseline statistics over `config.bl_window`
-- `signal_estimator`: `SignalEstimator` used to read the filter output at the pickoff time
-- `sampling_period`: time step of the waveforms
+A [`FltOptPrep`](@ref) holding the pole-zero corrected waveforms, their 50% times,
+the baseline statistics, the signal estimator and the sampling period.
 """
 function dsp_flt_optimization_prepare(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Unitful.Time{<:Real})
     wvfs = decode_data(wvfs)
@@ -116,13 +141,13 @@ function dsp_flt_optimization_prepare(wvfs::ArrayOfRDWaveforms, config::DSPConfi
     wvfs_pz = InvCRFilter(τ).(shift_waveform.(wvfs, -bl_stats.mean))
     t50 = get_threshold(wvfs_pz, maximum.(wvfs_pz.signal) .* 0.5; mintot=config.kwargs_pars.tx_mintot)
     signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
-    return (; wvfs_pz, t50, bl_stats, signal_estimator, sampling_period=step(first(wvfs).time))
+    return FltOptPrep(wvfs_pz, t50, bl_stats, signal_estimator, step(first(wvfs).time))
 end
 export dsp_flt_optimization_prepare
 
 
 """
-    dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt, ft, flt)
+    dsp_energy_rtft(prep::FltOptPrep, config::DSPConfig, rt, ft, flt)
 
 Energy of the prepared waveforms `prep` (see [`dsp_flt_optimization_prepare`](@ref))
 at rise time `rt` and flat-top time `ft`. `flt` is `Val(:trap)`, `Val(:cusp)`, `Val(:zac)`
@@ -140,13 +165,13 @@ or of the filter length (CUSP, ZAC), in floating point, before the filter is bui
 whose pickoff time lies outside the filtered time axis. The function only reads `prep` and
 is safe to call concurrently on the same `prep`.
 """
-function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:trap})
+function dsp_energy_rtft(prep::FltOptPrep, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:trap})
     T = typeof(float(prep.sampling_period))
     uflt_rtft = TrapezoidalChargeFilter(convert(T, rt), convert(T, ft))
     return prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), prep.t50 .+ (rt + ft/2))
 end
 
-function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:cusp})
+function dsp_energy_rtft(prep::FltOptPrep, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:cusp})
     flt_length = config.flt_length_cusp
     scale = ustrip(NoUnits, flt_length / prep.sampling_period)
     T = typeof(float(flt_length))
@@ -154,7 +179,7 @@ function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<
     return prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), prep.t50 .+ flt_length/2)
 end
 
-function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:zac})
+function dsp_energy_rtft(prep::FltOptPrep, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, ::Val{:zac})
     flt_length = config.flt_length_zac
     scale = ustrip(NoUnits, flt_length / prep.sampling_period)
     T = typeof(float(flt_length))
@@ -162,7 +187,7 @@ function dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<
     return prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), prep.t50 .+ flt_length/2)
 end
 
-dsp_energy_rtft(prep::NamedTuple, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, flt::Symbol) =
+dsp_energy_rtft(prep::FltOptPrep, config::DSPConfig, rt::Unitful.Time{<:Real}, ft::Unitful.Time{<:Real}, flt::Symbol) =
     dsp_energy_rtft(prep, config, rt, ft, Val(flt))
 export dsp_energy_rtft
 
@@ -202,150 +227,88 @@ export realized_flattop
 
 
 """
-    dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
+    dsp_trap_rt_optimization(prep::FltOptPrep, config::DSPConfig; ft::Quantity{T}=2.0u"µs")
+    dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}; ft::Quantity{T}=2.0u"µs")
 
-Get ENC noise grid values for given trap grid rise times.
+Get ENC noise grid values for given trap grid rise times. The filter output is read at
+`config.enc_pickoff_trap`. The waveform method prepares `wvfs` with
+[`dsp_flt_optimization_prepare`](@ref).
 
 # Returns
     - `enc_trap_grid`: Array ENC noise values for the given trap rise time grid
 """
-function dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=2.0u"µs") where T<:Real
-    # get config parameters
-    bl_window                   = config.bl_window
-    e_grid_rt_trap              = config.e_grid_rt_trap
-    enc_pickoff_trap            = config.enc_pickoff_trap
-
-    # get waveform data
-    wvfs = decode_data(wvfs)
-
-    # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
-
-    # substract baseline from waveforms
-    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
-
-    # deconvolute waveform
-    deconv_flt = InvCRFilter(τ)
-    wvfs = deconv_flt.(wvfs)
-
-    # get signal estimator
-    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
-
-    # get energy grid for efficient optimization
-    enc_trap_grid = zeros(Float64, length(e_grid_rt_trap), length(wvfs))
+function dsp_trap_rt_optimization(prep::FltOptPrep, config::DSPConfig; ft::Quantity{T}=2.0u"µs") where T<:Real
+    e_grid_rt_trap = config.e_grid_rt_trap
+    enc_trap_grid = zeros(Float64, length(e_grid_rt_trap), length(prep.wvfs_pz))
     for (r, rt) in enumerate(e_grid_rt_trap)
-        
-        uflt_rtft      = TrapezoidalChargeFilter(rt, ft)
-        
-        enc_rtft       = signal_estimator.(uflt_rtft.(wvfs), enc_pickoff_trap)
-
-        enc_trap_grid[r, :]   = enc_rtft
+        uflt_rtft = TrapezoidalChargeFilter(rt, ft)
+        enc_trap_grid[r, :] = prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), config.enc_pickoff_trap)
     end
-
     return enc_trap_grid
 end
+
+dsp_trap_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}; ft::Quantity{T}=2.0u"µs") where T<:Real =
+    dsp_trap_rt_optimization(dsp_flt_optimization_prepare(wvfs, config, τ), config; ft)
 export dsp_trap_rt_optimization
 
 
 """
-    dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
+    dsp_cusp_rt_optimization(prep::FltOptPrep, config::DSPConfig; ft::Quantity{T}=2.0u"µs")
+    dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}; ft::Quantity{T}=2.0u"µs")
 
-Get ENC noise grid values for given CUSP grid rise times.
+Get ENC noise grid values for given CUSP grid rise times. The filter output is read at
+`config.enc_pickoff_cusp`. The waveform method prepares `wvfs` with
+[`dsp_flt_optimization_prepare`](@ref).
 
 # Returns
     - `enc_cusp_grid`: Array ENC noise values for the given CUSP rise time grid
 """
-function dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=2.0u"µs") where T<:Real
-    # get config parameters
-    bl_window                   = config.bl_window
-    e_grid_rt_cusp              = config.e_grid_rt_cusp
-    enc_pickoff_cusp            = config.enc_pickoff_cusp
-    flt_length_cusp             = config.flt_length_cusp
-    cusp_scale                  = ustrip(NoUnits, flt_length_cusp/step(wvfs[1].time))
-
-    # set τ for CUSP filter to very high number to switch of CR filter
+function dsp_cusp_rt_optimization(prep::FltOptPrep, config::DSPConfig; ft::Quantity{T}=2.0u"µs") where T<:Real
+    e_grid_rt_cusp = config.e_grid_rt_cusp
+    flt_length_cusp = config.flt_length_cusp
+    cusp_scale = ustrip(NoUnits, flt_length_cusp / prep.sampling_period)
+    # τ = 10000000 µs disables the CR filter of CUSP
     τ_cusp = 10000000.0u"µs"
-
-    # get waveform data
-    wvfs = decode_data(wvfs)
-
-    # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
-
-    # substract baseline from waveforms
-    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
-
-    # deconvolute waveform
-    deconv_flt = InvCRFilter(τ)
-    wvfs = deconv_flt.(wvfs)
-
-    # get signal estimator
-    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
-
-    # get energy grid for efficient optimization
-    enc_cusp_grid = zeros(Float64, length(collect(e_grid_rt_cusp)), length(wvfs))
+    enc_cusp_grid = zeros(Float64, length(collect(e_grid_rt_cusp)), length(prep.wvfs_pz))
     for (r, rt) in enumerate(e_grid_rt_cusp)
-        
-        uflt_rtft      = CUSPChargeFilter(rt, ft, τ_cusp, flt_length_cusp, cusp_scale)
-        
-        enc_rtft       = signal_estimator.(uflt_rtft.(wvfs), enc_pickoff_cusp)
-
-        enc_cusp_grid[r, :]   = enc_rtft
+        uflt_rtft = CUSPChargeFilter(rt, ft, τ_cusp, flt_length_cusp, cusp_scale)
+        enc_cusp_grid[r, :] = prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), config.enc_pickoff_cusp)
     end
-
     return enc_cusp_grid
 end
+
+dsp_cusp_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}; ft::Quantity{T}=2.0u"µs") where T<:Real =
+    dsp_cusp_rt_optimization(dsp_flt_optimization_prepare(wvfs, config, τ), config; ft)
 export dsp_cusp_rt_optimization
 
 
 """
-    dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=4.0u"µs") where T<:Real
+    dsp_zac_rt_optimization(prep::FltOptPrep, config::DSPConfig; ft::Quantity{T}=2.0u"µs")
+    dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}; ft::Quantity{T}=2.0u"µs")
 
-Get ENC noise grid values for given ZAC grid rise times.
+Get ENC noise grid values for given ZAC grid rise times. The filter output is read at
+`config.enc_pickoff_zac`. The waveform method prepares `wvfs` with
+[`dsp_flt_optimization_prepare`](@ref).
 
 # Returns
     - `enc_zac_grid`: Array ENC noise values for the given ZAC rise time grid
 """
-function dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T},; ft::Quantity{T}=2.0u"µs") where T<:Real
-    # get config parameters
-    bl_window                   = config.bl_window
-    e_grid_rt_zac               = config.e_grid_rt_zac
-    enc_pickoff_zac             = config.enc_pickoff_zac
-    flt_length_zac              = config.flt_length_zac
-    zac_scale                   = ustrip(NoUnits, flt_length_zac/step(wvfs[1].time))
-
-    # set τ for ZAC filter to very high number to switch of CR filter
+function dsp_zac_rt_optimization(prep::FltOptPrep, config::DSPConfig; ft::Quantity{T}=2.0u"µs") where T<:Real
+    e_grid_rt_zac = config.e_grid_rt_zac
+    flt_length_zac = config.flt_length_zac
+    zac_scale = ustrip(NoUnits, flt_length_zac / prep.sampling_period)
+    # τ = 10000000 µs disables the CR filter of ZAC
     τ_zac = 10000000.0u"µs"
-
-    # get waveform data
-    wvfs = decode_data(wvfs)
-
-    # get baseline mean, std and slope
-    bl_stats = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
-
-    # substract baseline from waveforms
-    wvfs = shift_waveform.(wvfs, -bl_stats.mean)
-
-    # deconvolute waveform
-    deconv_flt = InvCRFilter(τ)
-    wvfs = deconv_flt.(wvfs)
-
-    # get signal estimator
-    signal_estimator = SignalEstimator(PolynomialDNI(config.kwargs_pars.sig_interpolation_order, config.kwargs_pars.sig_interpolation_length))
-
-    # get energy grid for efficient optimization
-    enc_zac_grid = zeros(Float64, length(e_grid_rt_zac), length(wvfs))
+    enc_zac_grid = zeros(Float64, length(e_grid_rt_zac), length(prep.wvfs_pz))
     for (r, rt) in enumerate(e_grid_rt_zac)
-        
-        uflt_rtft      = ZACChargeFilter(rt, ft, τ_zac, flt_length_zac, zac_scale)
-        
-        enc_rtft       = signal_estimator.(uflt_rtft.(wvfs), enc_pickoff_zac)
-
-        enc_zac_grid[r, :]   = enc_rtft
+        uflt_rtft = ZACChargeFilter(rt, ft, τ_zac, flt_length_zac, zac_scale)
+        enc_zac_grid[r, :] = prep.signal_estimator.(uflt_rtft.(prep.wvfs_pz), config.enc_pickoff_zac)
     end
-
     return enc_zac_grid
 end
+
+dsp_zac_rt_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{T}; ft::Quantity{T}=2.0u"µs") where T<:Real =
+    dsp_zac_rt_optimization(dsp_flt_optimization_prepare(wvfs, config, τ), config; ft)
 export dsp_zac_rt_optimization
 
 
