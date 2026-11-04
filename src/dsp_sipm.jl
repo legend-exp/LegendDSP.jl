@@ -118,8 +118,8 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     bl_stats = signalstats.(wvfs_int, time_min, t_bl_stop)
     sigstats = signalstats.(wvfs_int, time_min, time_max)
     
-    # flip around x-axis for discharge detection
-    wvfs_int_flip = multiply_waveform.(wvfs_int, -1.0)
+    # flip around x-axis for discharge detection, relative to the baseline (median) of each integrated waveform
+    wvfs_int_flip = multiply_waveform.(shift_waveform.(wvfs_int, .-median.(wvfs_int.signal)), -1.0)
     inters_thres_DC = thresholdstats_mad.(wvfs_int_flip, min_dc_threshold, max_dc_threshold)
     inters_DC = intflt_sg.(wvfs_int_flip, n_σ_dc_threshold .* inters_thres_DC)
 
@@ -139,7 +139,7 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
 
     # discharge detection on flipped integrated waveforms 
     inters_thres_DC_trap = thresholdstats_mad.(wvfs_int_flip, trap_min_dc_threshold, trap_max_dc_threshold)
-    inters_DC_trap = intflt_sg.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
+    inters_DC_trap = intflt_trap.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
 
     # output Table 
     return TypedTables.Table(
@@ -282,8 +282,8 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     bl_stats = signalstats.(wvfs_int, time_min, t_bl_stop)
     sigstats = signalstats.(wvfs_int, time_min, time_max)
     
-    # flip around x-axis for discharge detection
-    wvfs_int_flip = multiply_waveform.(wvfs_int, -1.0)
+    # flip around x-axis for discharge detection, relative to the baseline (median) of each integrated waveform
+    wvfs_int_flip = multiply_waveform.(shift_waveform.(wvfs_int, .-median.(wvfs_int.signal)), -1.0)
     inters_thres_DC = thresholdstats_mad.(wvfs_int_flip, min_dc_threshold, max_dc_threshold)
     inters_DC = intflt_sg.(wvfs_int_flip, n_σ_dc_threshold .* inters_thres_DC)
 
@@ -303,7 +303,7 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
 
     # discharge detection on flipped integrated waveforms 
     inters_thres_DC_trap = thresholdstats_mad.(wvfs_int_flip, trap_min_dc_threshold, trap_max_dc_threshold)
-    inters_DC_trap = intflt_sg.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
+    inters_DC_trap = intflt_trap.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
 
     # output Table 
     return TypedTables.Table(

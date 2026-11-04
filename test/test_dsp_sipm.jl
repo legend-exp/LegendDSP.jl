@@ -147,6 +147,37 @@ end
     end
 end
 
+# noise, a start offset (the integrated waveform then runs below zero) and one 300 ns discharge at 30 µs
+function make_discharge_sipm_data(N=10; offset=4.0, dip=-30.0, noise=1.0)
+    rng = MersenneTwister(1)
+    n = 6250
+    t = (0:n-1) .* 16.0u"ns"
+    wvfs = map(1:N) do _
+        signal = noise .* randn(rng, n)
+        signal[1:10] .+= offset
+        dip_start = round(Int, 30e3 / 16)
+        signal[dip_start:dip_start + 18] .+= dip
+        RDWaveform(t, signal)
+    end
+    Table(waveform = StructArray(wvfs), baseline = fill(0.0f0, N), timestamp = fill(UInt64(0), N),
+          eventnumber = UInt32.(1:N), daqenergy = fill(UInt16(0), N))
+end
+
+@testset "dsp_sipm discharge tagging" begin
+    data = make_discharge_sipm_data()
+    config = make_sipm_config()
+    # the trap discharge finder is the one of the trap block: with a huge minimum time over threshold it finds nothing,
+    # while the SG finder still finds the discharge
+    config.filters.trap.min_tot_intersect = 10000.0u"ns"
+    result = dsp_sipm(data, config, PropDict(:sg => PropDict(:wl => 200.0u"ns")))
+    # the discharge threshold is relative to the baseline of the integrated waveform: exactly one discharge per waveform
+    # although the integrated waveform runs several sigma below zero
+    @test all(result.blmean .< -2.0)
+    @test all(length.(result.trig_pos_DC_sg) .== 1)
+    @test all(29.5u"µs" .<= first.(result.trig_pos_DC_sg) .<= 30.5u"µs")
+    @test all(isempty.(result.trig_pos_DC_trap))
+end
+
 # Note: dsp_sipm_compressed is not tested here because it requires
 # bit-drop compressed waveform data (waveform_bit_drop) decoded via
 # LegendDataTypes.decode_data, which is hard to mock with synthetic data.
