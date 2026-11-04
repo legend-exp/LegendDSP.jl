@@ -1,18 +1,13 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
-# Workloads cover the exported `dsp_*` functions with the element types used on
-# decoded HPGe and SiPM waveforms (Float64 samples on a 16 ns step axis).
-# `dsp_sipm_compressed` and `dsp_pmts` are not covered: they need waveforms
-# stored in LegendDataTypes' bit-drop encoding and PMT-specific metadata.
+# Not covered: `dsp_sipm_compressed` and `dsp_pmts` (they need bit-drop encoded waveforms and PMT metadata).
 @setup_workload begin
     n_wvf = 2
 
-    # HPGe waveform: baseline up to 48 µs, 2 µs rise, exponential tail with τ = 500 µs.
     hpge_signal(n) = [i < 3000 ? 1000.0 : i < 3125 ? 1000.0 + 10000.0 * (i - 3000) / 125 :
                       1000.0 + 10000.0 * exp(-(i - 3125) / 31250) for i in 1:n]
     hpge_wvfs() = ArrayOfRDWaveforms([RDWaveform((0:8191) .* 16.0u"ns", hpge_signal(8192)) for _ in 1:n_wvf])
 
-    # SiPM waveform: flat baseline with a pulse at 50 µs.
     sipm_signal(n) = [i < 3125 ? 0.0 : 5.0 * exp(-(i - 3125) / 30.0) for i in 1:n]
     sipm_wvfs() = ArrayOfRDWaveforms([RDWaveform((0:6249) .* 16.0u"ns", sipm_signal(6250)) for _ in 1:n_wvf])
 
