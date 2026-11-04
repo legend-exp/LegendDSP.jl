@@ -229,7 +229,8 @@ function make_dplms_waveform(rng; w = 2.0, amplitude = 1e4, τ = 400.0u"µs", σ
 end
 
 @testset "dplms_default_grid" begin
-    @test [(w.zo, w.ff) for w in dplms_default_grid(7)] == [(zo, 7k) for zo in (0.0, 1e3) for k in 1:4]
+    @test [(w.zo, w.ff) for w in dplms_default_grid(7)] == [(0.0, 7k) for k in 1:4]
+    @test [(w.zo, w.ff) for w in dplms_default_grid(7; zo = (0.0, 1e3))] == [(zo, 7k) for zo in (0.0, 1e3) for k in 1:4]
     # explicit sample counts replace the multiples of n_rise
     grid = dplms_default_grid(7; zo = 0.0, ff = 2:2:6)
     @test [w.ff for w in grid] == [2, 4, 6] && all(w -> w.zo == 0 && w.za == 1e3, grid)
@@ -241,7 +242,8 @@ end
     wvfs = ArrayOfRDWaveforms([make_dplms_waveform(rng; w = w) for w in widths])
     config = make_fake_config()
     τ = 400.0u"µs"
-    res = dsp_dplms_optimization(wvfs, config, τ, widths; n_pre = 40, n_post = 40, n_bins = 2)
+    res = dsp_dplms_optimization(wvfs, config, τ, widths; n_pre = 40, n_post = 40, n_bins = 2,
+        grid = n -> dplms_default_grid(n; zo = (0.0, 1e3)))
     g = length(res.grid)
     @test size(res.e_grid) == (g, 300)
     @test size(res.emax_grid) == (g, 300)
@@ -327,12 +329,11 @@ end
     @test all(length.(res.coeffs) .== 2 * res.n_pre + 1)
     @test all(isfinite, res.e_grid)
     @test res.t_pickoff == res.n_post * Δt
-    # wider flat-top terms give longer flat tops and shorter shaping times; with zero output
-    # area the negative lobes need room in the window, so this holds for zo = 0 only
+    # wider flat-top terms give longer flat tops and shorter shaping times at the default zo = 0;
+    # with zero output area the negative lobes need room in the window and this does not hold
     r_ff = dsp_dplms_optimization(wvfs, config, 400.0u"µs", widths; n_bins = 2)
     @test all(>(0u"ns"), r_ff.flat_top)
-    idxs = findall(w -> w.zo == 0, r_ff.grid)
-    @test length(idxs) == 4 && issorted(r_ff.flat_top[idxs]) && issorted(r_ff.shaping_time[idxs]; rev = true)
+    @test length(r_ff.grid) == 4 && issorted(r_ff.flat_top) && issorted(r_ff.shaping_time; rev = true)
     @test_throws ArgumentError dsp_dplms_optimization(wvfs, config, 400.0u"µs", widths; n_pre = 200, n_post = 200, grid)
 end
 

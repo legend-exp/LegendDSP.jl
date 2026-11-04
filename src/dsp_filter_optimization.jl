@@ -616,7 +616,7 @@ end
 export dsp_mwa_optimization_compressed
 
 """
-    dplms_default_grid(n_rise::Integer; nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, zo = (0.0, 1e3), ff_factors = 1:4, ff = nothing)
+    dplms_default_grid(n_rise::Integer; nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, zo = 0.0, ff_factors = 1:4, ff = nothing)
 
 DPLMS grid of flat-top widenings `ff = k·n_rise` samples for `k` in `ff_factors`, or of the
 sample counts `ff` if given, for every
@@ -626,7 +626,7 @@ weight ratios matter, and in these units any `za` above about 1 already enforces
 `za = 0` switches the zero-area condition off. `zo = 0` leaves the area of the filter output
 free, `zo = 1e3` makes it zero.
 """
-function dplms_default_grid(n_rise::Integer; nm::Real = 1.0, za::Real = 1e3, ft::Real = 1.0, ct::Real = 0.0, zo = (0.0, 1e3), ff_factors = 1:4, ff = nothing)
+function dplms_default_grid(n_rise::Integer; nm::Real = 1.0, za::Real = 1e3, ft::Real = 1.0, ct::Real = 0.0, zo = 0.0, ff_factors = 1:4, ff = nothing)
     ffs = isnothing(ff) ? [round(Int, k * n_rise) for k in ff_factors] : ff
     [(nm = float(nm), za = float(za), ft = float(ft), ct = float(ct), zo = float(z), ff = Int(f)) for z in zo for f in ffs]
 end
@@ -681,7 +681,7 @@ penalizes the output slope of every drift-bin reference shifted by up to `ff` sa
 output stays flat while any of these shapes moves by `ff` samples. `n_rise` is the number of
 samples after the alignment point until the slowest drift-bin reference reaches `ff_level` of
 the plateau. `grid` is either a vector of grid points or a function of `n_rise` returning one,
-e.g. `grid = n -> dplms_default_grid(n; za = 0, zo = 0)` for filters without the zero-area condition.
+e.g. `grid = n -> dplms_default_grid(n; za = 0)` for filters without the zero-area condition.
 
 `flat_top` and `shaping_time` describe each filter's output for the full-length drift-bin
 references. The flat top is the interval around the read-out time where every filtered
