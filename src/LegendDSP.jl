@@ -24,6 +24,7 @@ using Tables
 using TypedTables
 using LIBSVM
 using LegendDataTypes
+using PrecompileTools: @setup_workload, @compile_workload
 
 import Adapt
 import RadiationDetectorDSP: fltinstance, rdfilt!, flt_output_length, 
@@ -56,5 +57,6 @@ include("multi_intersect.jl")
 include("moving_window_multi.jl")
 include("alternative_filters.jl")
 include("timeaxis.jl")
+include("precompile.jl")
 
 end # module
