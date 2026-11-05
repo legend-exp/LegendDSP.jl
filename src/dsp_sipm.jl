@@ -43,6 +43,11 @@ The output data is a table with the following columns:
 - `trig_pos_high_DC_trap`: trap discharge trigger high positions
 - `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
 - `trig_max_DC_trap`: trap discharge trigger maxima
+## Cross-talk tag filter columns
+- `threshold_xt_tag`: threshold of the integrated long SG waveform
+- `trig_pos_xt_tag`, `trig_pos_high_xt_tag`: start and end of its regions above threshold
+- `trig_pos_tot_xt_tag`: time over threshold of the regions
+- `trig_max_xt_tag`: maxima of the regions
 """
 function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # common config
@@ -73,6 +78,12 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     trap_min_dc_threshold  = trap_config.min_dc_threshold
     trap_max_dc_threshold  = trap_config.max_dc_threshold
     trap_n_σ_dc_threshold  = trap_config.n_σ_dc_threshold
+
+    xt_tag_config = config.filters.xt_tag
+    xt_tag_window_length     = xt_tag_config.window_length
+    xt_tag_n_σ_threshold     = xt_tag_config.n_σ_threshold
+    xt_tag_min_tot_intersect = xt_tag_config.min_tot_intersect
+    xt_tag_max_tot_intersect = xt_tag_config.max_tot_intersect
 
     # unpack optimization parameters
     sg_window_length = pars_optimization.sg.wl
@@ -141,6 +152,12 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
     inters_thres_DC_trap = thresholdstats_mad.(wvfs_int_flip, trap_min_dc_threshold, trap_max_dc_threshold)
     inters_DC_trap = intflt_trap.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
 
+    wvfs_xt_tag = integrator_filter.(SavitzkyGolayFilter(xt_tag_window_length, sg_flt_degree, 1).(wvfs))
+    wvfs_xt_tag = shift_waveform.(wvfs_xt_tag, .-median.(wvfs_xt_tag.signal))
+    intflt_xt_tag = IntersectMaximum(xt_tag_min_tot_intersect, xt_tag_max_tot_intersect)
+    inters_thres_xt_tag = thresholdstats_mad.(wvfs_xt_tag)
+    inters_xt_tag = intflt_xt_tag.(wvfs_xt_tag, xt_tag_n_σ_threshold .* inters_thres_xt_tag)
+
     # output Table 
     return TypedTables.Table(
         blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
@@ -157,7 +174,10 @@ function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where 
         trig_pos_trap = VectorOfVectors(inters_trap.x), trig_pos_high_trap = VectorOfVectors(inters_trap.x_high),
         trig_pos_tot_trap = VectorOfVectors(inters_trap.x_tot), trig_max_trap = VectorOfVectors(inters_trap.max),
         trig_pos_DC_trap = VectorOfVectors(inters_DC_trap.x), trig_pos_high_DC_trap = VectorOfVectors(inters_DC_trap.x_high),
-        trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max)
+        trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max),
+        threshold_xt_tag = inters_thres_xt_tag,
+        trig_pos_xt_tag = VectorOfVectors(inters_xt_tag.x), trig_pos_high_xt_tag = VectorOfVectors(inters_xt_tag.x_high),
+        trig_pos_tot_xt_tag = VectorOfVectors(inters_xt_tag.x_tot), trig_max_xt_tag = VectorOfVectors(inters_xt_tag.max)
     )
 end
 export dsp_sipm
@@ -207,6 +227,11 @@ The output data is a table with the following columns:
 - `trig_pos_high_DC_trap`: trap discharge trigger high positions
 - `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
 - `trig_max_DC_trap`: trap discharge trigger maxima
+## Cross-talk tag filter columns
+- `threshold_xt_tag`: threshold of the integrated long SG waveform
+- `trig_pos_xt_tag`, `trig_pos_high_xt_tag`: start and end of its regions above threshold
+- `trig_pos_tot_xt_tag`: time over threshold of the regions
+- `trig_max_xt_tag`: maxima of the regions
 """
 function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # common config
@@ -237,6 +262,12 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     trap_min_dc_threshold  = trap_config.min_dc_threshold
     trap_max_dc_threshold  = trap_config.max_dc_threshold
     trap_n_σ_dc_threshold  = trap_config.n_σ_dc_threshold
+
+    xt_tag_config = config.filters.xt_tag
+    xt_tag_window_length     = xt_tag_config.window_length
+    xt_tag_n_σ_threshold     = xt_tag_config.n_σ_threshold
+    xt_tag_min_tot_intersect = xt_tag_config.min_tot_intersect
+    xt_tag_max_tot_intersect = xt_tag_config.max_tot_intersect
 
     # unpack optimization parameters
     sg_window_length = pars_optimization.sg.wl
@@ -305,6 +336,12 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
     inters_thres_DC_trap = thresholdstats_mad.(wvfs_int_flip, trap_min_dc_threshold, trap_max_dc_threshold)
     inters_DC_trap = intflt_trap.(wvfs_int_flip, trap_n_σ_dc_threshold .* inters_thres_DC_trap)
 
+    wvfs_xt_tag = integrator_filter.(SavitzkyGolayFilter(xt_tag_window_length, sg_flt_degree, 1).(wvfs))
+    wvfs_xt_tag = shift_waveform.(wvfs_xt_tag, .-median.(wvfs_xt_tag.signal))
+    intflt_xt_tag = IntersectMaximum(xt_tag_min_tot_intersect, xt_tag_max_tot_intersect)
+    inters_thres_xt_tag = thresholdstats_mad.(wvfs_xt_tag)
+    inters_xt_tag = intflt_xt_tag.(wvfs_xt_tag, xt_tag_n_σ_threshold .* inters_thres_xt_tag)
+
     # output Table 
     return TypedTables.Table(
         blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
@@ -321,7 +358,10 @@ function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropD
         trig_pos_trap = VectorOfVectors(inters_trap.x), trig_pos_high_trap = VectorOfVectors(inters_trap.x_high),
         trig_pos_tot_trap = VectorOfVectors(inters_trap.x_tot), trig_max_trap = VectorOfVectors(inters_trap.max),
         trig_pos_DC_trap = VectorOfVectors(inters_DC_trap.x), trig_pos_high_DC_trap = VectorOfVectors(inters_DC_trap.x_high),
-        trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max)
+        trig_pos_tot_DC_trap = VectorOfVectors(inters_DC_trap.x_tot), trig_max_DC_trap = VectorOfVectors(inters_DC_trap.max),
+        threshold_xt_tag = inters_thres_xt_tag,
+        trig_pos_xt_tag = VectorOfVectors(inters_xt_tag.x), trig_pos_high_xt_tag = VectorOfVectors(inters_xt_tag.x_high),
+        trig_pos_tot_xt_tag = VectorOfVectors(inters_xt_tag.x_tot), trig_max_xt_tag = VectorOfVectors(inters_xt_tag.max)
     )
 end
 export dsp_sipm_compressed
