@@ -65,6 +65,12 @@ function make_sipm_config()
                 :min_tot_intersect => 48.0u"ns",
                 :max_tot_intersect => 250.0u"ns",
             ),
+            :xt_tag => PropDict(
+                :window_length     => 500.0u"ns",
+                :n_σ_threshold     => 2.0,
+                :min_tot_intersect => 48.0u"ns",
+                :max_tot_intersect => 250.0u"ns",
+            ),
         ),
     )
 end
@@ -176,6 +182,35 @@ end
     @test all(length.(result.trig_pos_DC_sg) .== 1)
     @test all(29.5u"µs" .<= first.(result.trig_pos_DC_sg) .<= 30.5u"µs")
     @test all(isempty.(result.trig_pos_DC_trap))
+end
+
+function make_charge_sipm_data(N=10; amplitude=15.0, noise=1.0)
+    rng = MersenneTwister(1)
+    n = 6250
+    t = (0:n-1) .* 16.0u"ns"
+    wvfs = map(1:N) do _
+        signal = noise .* randn(rng, n)
+        step_start = round(Int, 50e3 / 16)
+        signal[step_start:end] .+= amplitude .* exp.(-(0:n - step_start) ./ 200.0)
+        osc_start = round(Int, 20e3 / 16)
+        signal[osc_start:osc_start + 5] .+= amplitude
+        signal[osc_start + 6:osc_start + 11] .-= amplitude
+        RDWaveform(t, signal)
+    end
+    Table(waveform = StructArray(wvfs), baseline = fill(0.0f0, N), timestamp = fill(UInt64(0), N),
+          eventnumber = UInt32.(1:N), daqenergy = fill(UInt16(0), N))
+end
+
+@testset "dsp_sipm cross-talk tag filter" begin
+    data = make_charge_sipm_data()
+    result = dsp_sipm(data, make_sipm_config(), PropDict(:sg => PropDict(:wl => 200.0u"ns")))
+    xt_tag_tot(i, t) = maximum((tot for (a, b, tot) in zip(result.trig_pos_xt_tag[i], result.trig_pos_high_xt_tag[i], result.trig_pos_tot_xt_tag[i])
+        if a - 300.0u"ns" <= t <= b + 300.0u"ns"); init = zero(eltype(result.trig_pos_tot_xt_tag[i])))
+    for i in eachindex(result)
+        @test result.trig_pos_tot_xt_tag[i] ≈ result.trig_pos_high_xt_tag[i] .- result.trig_pos_xt_tag[i]
+        @test xt_tag_tot(i, 50.0u"µs") > 1.0u"µs"
+        @test xt_tag_tot(i, 20.0u"µs") < 0.3u"µs"
+    end
 end
 
 # Note: dsp_sipm_compressed is not tested here because it requires
