@@ -65,6 +65,12 @@ function make_sipm_config()
                 :min_tot_intersect => 48.0u"ns",
                 :max_tot_intersect => 250.0u"ns",
             ),
+            :xt_tag => PropDict(
+                :window_length     => 500.0u"ns",
+                :n_σ_threshold     => 2.0,
+                :min_tot_intersect => 48.0u"ns",
+                :max_tot_intersect => 250.0u"ns",
+            ),
         ),
     )
 end
@@ -144,6 +150,66 @@ end
     t_min = first(wvfs_int[1].time)
     for i in findall(has_trig)
         @test result.blmean[i] ≈ signalstats(wvfs_int[i], t_min, minimum(result.trig_pos_sg[i])).mean
+    end
+end
+
+# noise, a start offset (the integrated waveform then runs below zero) and one 300 ns discharge at 30 µs
+function make_discharge_sipm_data(N=10; offset=4.0, dip=-30.0, noise=1.0)
+    rng = MersenneTwister(1)
+    n = 6250
+    t = (0:n-1) .* 16.0u"ns"
+    wvfs = map(1:N) do _
+        signal = noise .* randn(rng, n)
+        signal[1:10] .+= offset
+        dip_start = round(Int, 30e3 / 16)
+        signal[dip_start:dip_start + 18] .+= dip
+        RDWaveform(t, signal)
+    end
+    Table(waveform = StructArray(wvfs), baseline = fill(0.0f0, N), timestamp = fill(UInt64(0), N),
+          eventnumber = UInt32.(1:N), daqenergy = fill(UInt16(0), N))
+end
+
+@testset "dsp_sipm discharge tagging" begin
+    data = make_discharge_sipm_data()
+    config = make_sipm_config()
+    # the trap discharge finder is the one of the trap block: with a huge minimum time over threshold it finds nothing,
+    # while the SG finder still finds the discharge
+    config.filters.trap.min_tot_intersect = 10000.0u"ns"
+    result = dsp_sipm(data, config, PropDict(:sg => PropDict(:wl => 200.0u"ns")))
+    # the discharge threshold is relative to the baseline of the integrated waveform: exactly one discharge per waveform
+    # although the integrated waveform runs several sigma below zero
+    @test all(result.blmean .< -2.0)
+    @test all(length.(result.trig_pos_DC_sg) .== 1)
+    @test all(29.5u"µs" .<= first.(result.trig_pos_DC_sg) .<= 30.5u"µs")
+    @test all(isempty.(result.trig_pos_DC_trap))
+end
+
+function make_charge_sipm_data(N=10; amplitude=15.0, noise=1.0)
+    rng = MersenneTwister(1)
+    n = 6250
+    t = (0:n-1) .* 16.0u"ns"
+    wvfs = map(1:N) do _
+        signal = noise .* randn(rng, n)
+        step_start = round(Int, 50e3 / 16)
+        signal[step_start:end] .+= amplitude .* exp.(-(0:n - step_start) ./ 200.0)
+        osc_start = round(Int, 20e3 / 16)
+        signal[osc_start:osc_start + 5] .+= amplitude
+        signal[osc_start + 6:osc_start + 11] .-= amplitude
+        RDWaveform(t, signal)
+    end
+    Table(waveform = StructArray(wvfs), baseline = fill(0.0f0, N), timestamp = fill(UInt64(0), N),
+          eventnumber = UInt32.(1:N), daqenergy = fill(UInt16(0), N))
+end
+
+@testset "dsp_sipm cross-talk tag filter" begin
+    data = make_charge_sipm_data()
+    result = dsp_sipm(data, make_sipm_config(), PropDict(:sg => PropDict(:wl => 200.0u"ns")))
+    xt_tag_tot(i, t) = maximum((tot for (a, b, tot) in zip(result.trig_pos_xt_tag[i], result.trig_pos_high_xt_tag[i], result.trig_pos_tot_xt_tag[i])
+        if a - 300.0u"ns" <= t <= b + 300.0u"ns"); init = zero(eltype(result.trig_pos_tot_xt_tag[i])))
+    for i in eachindex(result)
+        @test result.trig_pos_tot_xt_tag[i] ≈ result.trig_pos_high_xt_tag[i] .- result.trig_pos_xt_tag[i]
+        @test xt_tag_tot(i, 50.0u"µs") > 1.0u"µs"
+        @test xt_tag_tot(i, 20.0u"µs") < 0.3u"µs"
     end
 end
 
