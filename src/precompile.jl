@@ -62,7 +62,8 @@
     sipm_config = PropDict(
         :t0_hpge_window => [47.0u"µs", 53.0u"µs"],
         :sg_flt_degree  => 3,
-        :filters => PropDict(:sg => sipm_filter(), :trap => sipm_filter(:rt => 100.0u"ns", :ft => 50.0u"ns", :pz_tau => 3.0u"µs")),
+        :filters => PropDict(:sg => sipm_filter(), :trap => sipm_filter(:rt => 100.0u"ns", :ft => 50.0u"ns", :pz_tau => 3.0u"µs"),
+                          :xt_tag => sipm_filter(:window_length => 500.0u"ns")),
     )
     sipm_sg_config = sipm_filter(:sg_flt_degree => 3)
     sipm_pars = PropDict(:sg => PropDict(:wl => 200.0u"ns"))
