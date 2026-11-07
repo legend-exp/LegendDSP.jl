@@ -33,7 +33,7 @@ The manual pages describe the concepts and the workflow of each part of the pack
 * [Filters](@ref) covers the filter types of the package: the moving-window and Savitzky-Golay filters, the alternative smoothing filters, the Haar filter, the derivative filter and the time-axis filter.
 * [Waveform Parameters](@ref) covers the functions that extract single parameters from waveforms (t0, threshold crossings, current, Q-drift, LQ and triggers) and the statistics on tails, extrema, thresholds and saturation.
 * [Decay Time](@ref) explains how the decay time of the preamplifier signal is determined and how it enters the pole-zero correction.
-* [Filter Optimization](@ref) covers the scans of rise time, flat-top time and current-filter window length, and the evaluation of the energy filters at single points on prepared waveforms.
+* [Filter Optimization](@ref) covers the scans of rise time, flat-top time and current-filter window length, and the evaluation of the energy filters at single points on prepared waveforms, and the synthesis of DPLMS energy filters.
 * [SiPM and PMT Processing](@ref) covers the SiPM chain with its trigger, discharge and cross-talk tag columns, the PMT chain, and the SiPM threshold and window-length scans.
 * [Machine-Learning Quality Cuts](@ref) covers the support-vector-machine quality cut and its interface to the chains.
 * [Use in Juleana.jl](@ref) describes how the production dataflow builds configurations and selects functions of this package by name.

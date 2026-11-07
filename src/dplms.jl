@@ -12,6 +12,14 @@ Shift `wvf` in time so that the feature at `t_align` lands at `t_target`. The ou
 time axis and length of the input; its value at time `t` is the input at
 `t + (t_align - t_target)`, interpolated with a cubic Catmull-Rom spline through the four
 nearest samples. Positions outside the record repeat the first or last sample.
+
+# Arguments
+- `wvf`: waveform to shift
+- `t_align`: time of the feature in `wvf`, for example `t50`
+- `t_target`: time at which the feature lies in the returned waveform
+
+# Returns
+- `RDWaveform` with the time axis of `wvf` and floating-point samples
 """
 function align_waveform(wvf::RDWaveform, t_align, t_target)
     shift = ustrip(NoUnits, (t_align - t_target) / step(wvf.time))
@@ -22,7 +30,7 @@ export align_waveform
 """
     align_waveforms(wvfs::ArrayOfRDWaveforms, t_align::AbstractVector, t_target)
 
-[`align_waveform`](@ref) for every waveform with its own alignment time.
+[`align_waveform`](@ref) for every waveform of `wvfs` with its own alignment time from `t_align`, one per waveform. Throws a `DimensionMismatch` if the axes of `wvfs` and `t_align` differ.
 """
 function align_waveforms(wvfs::ArrayOfRDWaveforms, t_align::AbstractVector, t_target)
     axes(wvfs) == axes(t_align) || throw(DimensionMismatch("waveforms $(axes(wvfs)) and alignment times $(axes(t_align)) differ"))
@@ -62,9 +70,12 @@ end
 """
     aligned_windows(wvfs::ArrayOfRDWaveforms, t_target, n_pre::Integer, n_post::Integer)
 
-Samples from `n_pre` before to `n_post` after the sample at `t_target`, one column per
+Samples from `n_pre` before to `n_post` after the sample nearest to `t_target`, one column per
 waveform. Throws if the window leaves the record, or if the waveforms do not share one
 time axis.
+
+# Returns
+- matrix of size `(n_pre + n_post + 1, length(wvfs))`
 """
 function aligned_windows(wvfs::ArrayOfRDWaveforms, t_target, n_pre::Integer, n_post::Integer)
     t = _shared_time_axis(wvfs)
@@ -83,6 +94,11 @@ consecutive samples inside `bl_window` of every waveform. The waveforms must be 
 subtracted; a residual offset appears as a rank-one term, not as noise. When the baseline
 mean subtracted from the waveforms was estimated over the same window, the lowest-frequency
 noise power is underestimated by about `n` divided by the number of baseline samples.
+
+Throws if the waveforms do not share one time axis or if `bl_window` holds fewer than `n` samples.
+
+# Returns
+- symmetric `n × n` matrix in the units of the squared waveform samples
 """
 function dplms_noise_matrix(wvfs::ArrayOfRDWaveforms, bl_window::ClosedInterval, n::Integer)
     t = _shared_time_axis(wvfs)
@@ -107,8 +123,11 @@ export dplms_noise_matrix
     dplms_reference(windows::AbstractMatrix, plateau::AbstractUnitRange)
 
 Superpulse of the aligned `windows` (one column per event): the row mean divided by its mean
-over the `plateau` rows, so the reference has unit amplitude after the rise. Returns
-`(ref, plateau)` with the divisor.
+over the `plateau` rows, so the reference has unit amplitude after the rise. Throws if that
+mean is not positive.
+
+# Returns
+- named tuple `(ref, plateau)` with the reference and the divisor, the plateau amplitude of the superpulse
 """
 function dplms_reference(windows::AbstractMatrix, plateau::AbstractUnitRange{<:Integer})
     Base.require_one_based_indexing(windows)
@@ -126,6 +145,10 @@ Flat-top matrix for a filter of `n = size(windows_wide, 1) - 2ff` samples, from 
 shapes (one column each, e.g. events or superpulses) widened by `ff` samples on each side. It
 is the mean over columns and over the `2ff` shifts of the outer product of the column's first
 difference, so `xᵀ F x` is the mean squared slope of the filter output around the pick-off.
+Throws if `ff < 1` or if the windows are too short for the widening.
+
+# Returns
+- symmetric `n × n` matrix
 """
 function dplms_flattop_matrix(windows_wide::AbstractMatrix, ff::Integer)
     ff >= 1 || throw(ArgumentError("flat-top widening ff must be at least 1, got $ff"))
@@ -148,7 +171,11 @@ export dplms_flattop_matrix
 Reference constraints per drift-time bin: the superpulse `r_b` of every bin `b` in `bins`,
 each divided by the common `plateau`, combined into `mat = mean_b r_b r_bᵀ` and
 `vec = mean_b r_b`. Bins are numbered `1:maximum(bins)` and every bin must hold an event.
-Returns `(mat, vec, refs)` with `refs` the per-bin references stacked into one column per bin.
+Throws if a bin holds no event, if a bin index is not positive, or if `windows` and `bins`
+differ in the number of events.
+
+# Returns
+- named tuple `(mat, vec, refs)` with `refs` the per-bin references stacked into one column per bin
 """
 function dplms_binned_reference(windows::AbstractMatrix, bins::AbstractVector{<:Integer}, plateau::Real)
     Base.require_one_based_indexing(windows, bins)
@@ -171,11 +198,25 @@ Solve the DPLMS system
     (nm·noise + ref refᵀ + za·𝟙 + ft·flattop + ct·binned.mat + zo·m mᵀ) x = ref + ct·binned.vec
 
 for the filter coefficients `x` along the window and rescale them so that `x ⋅ ref == 1`.
+`binned` is the result of [`dplms_binned_reference`](@ref) and is used only if `ct` is not zero.
 `𝟙` is the all-ones matrix, so `za` penalizes the squared coefficient sum. `m` is the window
 sample index relative to the window center, divided by the window length `n`, so `zo`
 penalizes `(mᵀx)²`. When the coefficients sum to zero, `mᵀx` is the area of the filter output
 for a unit step divided by `n`: with `za > 0`, `zo > 0` gives an output of zero area, as for a
-ZAC filter, and a linear baseline slope gives no output. Returns
+ZAC filter, and a linear baseline slope gives no output. Throws an `ArgumentError` if the system is
+singular or the solution is not finite.
+
+# Arguments
+- `noise`: noise matrix from [`dplms_noise_matrix`](@ref), in units of the reference amplitude squared
+- `ref`: reference from [`dplms_reference`](@ref)
+- `flattop`: matrix from [`dplms_flattop_matrix`](@ref) for the same filter length
+- `binned`: reference constraints from [`dplms_binned_reference`](@ref)
+
+# Keywords
+- `nm`, `za`, `ft`, `ct`, `zo`: weights of the noise, zero-area, flat-top, binned-reference and output-area terms; `ct` and `zo` default to 0
+
+# Returns
+- named tuple with
 
 - `coeffs`: the impulse response, `reverse(x)`, for `ConvolutionFilter(DirectConvolution(), coeffs)`;
   the filter output at the last sample of a window equals `x ⋅ window`,

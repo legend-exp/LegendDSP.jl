@@ -363,7 +363,8 @@ config = DSPConfig(PropDict(Dict(
     :a_grid_wl_sg => grid(100.0u"ns", 500.0u"ns", 50.0u"ns"),
     :a_mwa_windows => [100.0u"ns"], :a_mwa_passes => 3, :a_sg_windows => [200.0u"ns"],
     :flt_defaults => Dict(:sg => 200.0u"ns", :mwa => 100.0u"ns",
-        :trap => rise_flat(4.0, 2.0), :zac => rise_flat(4.0, 2.0), :cusp => rise_flat(2.0, 2.0)),
+        :trap => rise_flat(4.0, 2.0), :zac => rise_flat(4.0, 2.0), :cusp => rise_flat(2.0, 2.0),
+        :dplms => rise_flat(4.0, 2.0)),
     :kwargs_pars => Dict(
         :sig_interpolation_length => 800.0u"ns", :sig_interpolation_order => 3,
         :int_interpolation_length => 100.0u"ns", :int_interpolation_order => 3,

@@ -12,6 +12,7 @@ The energy filter scans share one preparation step, [`dsp_flt_optimization_prepa
 | [`dsp_trap_ft_optimization`](@ref), [`dsp_cusp_ft_optimization`](@ref), [`dsp_zac_ft_optimization`](@ref) | flat-top time `ft` at fixed rise time `rt` (argument); take waveforms and `τ` | `e_grid_ft_trap`, `e_grid_ft_cusp`, `e_grid_ft_zac` | `Matrix{Union{Missing,Float32}}`, rows: grid points, columns: waveforms (every entry is set; no `missing` is stored) |
 | [`dsp_flt_optimization_prepare`](@ref), [`dsp_energy_rtft`](@ref), [`realized_flattop`](@ref) | single points of the (`rt`, `ft`) plane; see [Prepared Workflow](@ref) | none | `FltOptPrep`, energies of all waveforms at one point, flat-top time that a filter applies |
 | [`dsp_qc_flt_optimization`](@ref), [`dsp_qc_flt_optimization_compressed`](@ref) | none | none | `Table` with the energy at the default trapezoid, baseline mean and slope, `t50`, and `qc_label` |
+| [`dsp_dplms_optimization`](@ref) | weights and flat-top widening of the DPLMS filter, see [DPLMS Filter](@ref); takes waveforms, `τ` and a drift-time proxy | none (`grid` argument, [`dplms_default_grid`](@ref)) | `NamedTuple` with the energies of every grid point, the filters, and the matrices |
 | [`dsp_qdrift_flt_optimization`](@ref) | none | `qdrift_int_length` | Vector of Q-drift values |
 | [`dsp_sg_optimization`](@ref), [`dsp_sg_optimization_compressed`](@ref) | window length of the Savitzky-Golay current filter | `a_grid_wl_sg` | `Table` with A/E for every window length |
 | [`dsp_mwa_optimization`](@ref), [`dsp_mwa_optimization_compressed`](@ref) | window length of the moving-window-average current filter | `a_grid_wl_mwa` | `Table` with A/E for every window length |
@@ -217,6 +218,135 @@ relative_spread(aoe) = vec(std(aoe; dims = 2) ./ mean(aoe; dims = 2))
 ```
 
 All waveforms have the same rise time, so the relative spread of A/E is the noise contribution of the current filter, which decreases with the window length until the filter smooths the rise itself. For real data the scan compares the A/E distributions of two calibration lines instead.
+
+## DPLMS Filter
+
+### Method
+
+A DPLMS filter is a finite-impulse-response energy filter whose weights are the solution of a constrained least-squares problem instead of a fixed shape such as a trapezoid. The weights are derived directly from measured signal and noise waveforms. The method is described by D'Andrea et al., [arXiv:2209.09863](https://arxiv.org/abs/2209.09863). The weights `x` minimize the filter output noise `xᵀ N x`, with the noise matrix `N` measured on baseline samples, under the constraints
+
+* the response to the reference pulse `r` is one, `x ⋅ r = 1`,
+* the output is flat around the read-out time (flat top), so that the energy does not depend on small shifts of the pulse, and
+* the coefficients sum to zero (zero area), so that a constant baseline offset gives no output.
+
+The constraints enter as quadratic penalties with weights, which turns the problem into one linear system. A further weight `zo` can make the area of the output for a step input zero, as for a ZAC filter. [`dplms_synthesis`](@ref) documents the system and the weights.
+
+### Input
+
+The functions work on presummed waveforms that are baseline subtracted and pole-zero corrected (the waveforms `wvfs_pre` inside [`dsp_icpc_compressed`](@ref)). The waveforms are aligned on `t50`, the time at which they reach 50 % of the maximum of a `TrapezoidalChargeFilter(10u"µs", 10u"µs")`; this is the column `t50_pre` of the compressed chain. The reference pulse is the mean of the aligned waveforms (superpulse), and its amplitude after the rise is the unit of all matrices. The noise matrix needs at least as many baseline samples inside `config.bl_window` as the filter has coefficients.
+
+### Building Blocks
+
+The functions of `dplms.jl` are the steps of the synthesis:
+
+| Function | Result |
+|:---------|:-------|
+| [`align_waveform`](@ref), [`align_waveforms`](@ref) | Waveforms shifted in time by a fractional number of samples with a cubic interpolation, so that the feature at `t_align` (here `t50`) lands at a common time |
+| [`aligned_windows`](@ref) | Matrix of the samples from `n_pre` before to `n_post` after the common time, one column per waveform |
+| [`dplms_noise_matrix`](@ref) | Noise matrix: the mean outer product of all windows of the filter length inside the baseline window |
+| [`dplms_reference`](@ref) | Superpulse of the windows, normalized to unit amplitude on a plateau after the rise |
+| [`dplms_flattop_matrix`](@ref) | Matrix whose quadratic form is the mean squared slope of the filter output, from reference pulses widened by `ff` samples on each side |
+| [`dplms_binned_reference`](@ref) | References per drift-time bin, as the matrix and vector of an additional constraint that the filter has unit response for every bin |
+| [`dplms_synthesis`](@ref) | Solution of the linear system for the weights `nm`, `za`, `ft`, `ct`, `zo`: the filter, its predicted noise, and its area |
+
+The filter returned by `dplms_synthesis` is the impulse response `coeffs`. The filter output at the last sample of a window of `n_pre + n_post + 1` samples is the energy, so the read-out time after `t50` is `n_post` samples.
+
+### Optimization over a Grid
+
+[`dsp_dplms_optimization`](@ref)`(wvfs, config, τ, drift; kwargs...)` runs all steps on a set of presummed waveforms, for example events of a calibration line, and synthesizes one filter for every point of a grid. `drift` is a drift-time proxy of every waveform; its quantiles define the `n_bins` drift-time bins of the reference constraint. The function subtracts the baseline in `config.bl_window`, corrects the pole-zero with `InvCRFilter(τ)`, determines `t50`, aligns the waveforms to the sample nearest the median `t50`, and builds the matrices. Unless given, the window has the longest symmetric extent `n_pre = n_post` that leaves `n_noise_windows` windows per event inside the baseline window for the noise matrix.
+
+A grid point is a `NamedTuple` with the weights `nm` (noise), `za` (zero area), `ft` (flat top), `ct` (binned references), `zo` (output area) and the flat-top widening `ff` in samples. [`dplms_default_grid`](@ref)`(n_rise; kwargs...)` builds the grid with the widenings `ff = k·n_rise` for `k` in 1:4 and the weights given as keywords. `n_rise` is the number of samples from the alignment point until the slowest drift-time reference reaches 99.9 % of its plateau. The widening sets how far the pulse can move while the output stays flat; larger values give a longer flat top and more noise. Only the ratios of the weights matter. The keyword `grid` takes a vector of grid points or a function of `n_rise` that returns one, for example `grid = n -> dplms_default_grid(n; za = 0)` for filters without the zero-area condition.
+
+The function returns a `NamedTuple`. The energies `e_grid` and filter-output maxima `emax_grid` have one row per grid point and one column per waveform. The filters are in `coeffs` with the common read-out time `t_pickoff`. For every grid point `noise_out` is the predicted output noise in units of the reference amplitude, `zero_area` the coefficient sum, `output_area` the area of the output for a step input, and `flat_top` and `shaping_time` the length of the flat top and of the rise of the output for the drift-time references. The matrices, references, superpulses and the response of every filter to the superpulse are returned as well; see the docstring for the list. As for the other scans, choosing the best grid point from the widths of the energy distributions is a separate step.
+
+### Energy in the Compressed Chain
+
+[`dsp_dplms_energy`](@ref) applies a filter to baseline-subtracted, pole-zero-corrected waveforms and reads the value at `t50 + t_pickoff` with a signal estimator. [`dsp_icpc_compressed`](@ref) calls it on the presummed waveforms with the filter from [`get_dplms_pars`](@ref)`(pars_filter, config, Δt)` and the column `t50_pre`. It stores the energy as `e_dplms` and the maximum of the output in `config.current_window` shifted by `t_pickoff` as `e_dplms_max`.
+
+`get_dplms_pars` returns `coefficients` and `t_pickoff` of `pars_filter.dplms` if the entry exists. Otherwise it builds the trapezoid of `config.default_flt_param.dplms` (`rt` and `ft`) as a filter at the sampling interval `Δt`, read out at `rt + ft/2`, so that `e_dplms` is the energy of `TrapezoidalChargeFilter(rt, ft)`. Without `pars_filter.dplms` and without `default_flt_param.dplms` the function throws an `ArgumentError`. The production dataflow does not call the DPLMS synthesis, see [Use in Juleana.jl](@ref).
+
+### A Synthetic DPLMS Example
+
+The example synthesizes one DPLMS filter from synthetic presummed waveforms. The pulses are steps with rise times between 0.5 and 2.5 µs at a jittering onset, with white noise and a random walk as baseline noise. There is no decay tail, so no pole-zero correction is needed. The rise time stands in for the drift-time proxy. The filter is compared with a trapezoid of the same length on the same events. The example only illustrates the functions; the noise model is not that of a detector.
+
+```@example dplms
+using LegendDSP
+using RadiationDetectorDSP, RadiationDetectorSignals, ArraysOfArrays
+using Unitful, StableRNGs, Statistics, IntervalSets, TypedTables
+
+rng = StableRNG(7)
+dt = 0.5u"µs"
+t = range(0.0u"µs", step = dt, length = 600)
+
+function synthetic_pulse(rng, t; amplitude = 1000.0, σ_white = 3.0, σ_walk = 0.6)
+    t0 = 100.0 + 3 * randn(rng)
+    rise = 0.5 + 2 * rand(rng)
+    shape = clamp.((ustrip.(u"µs", t) .- t0) ./ rise, 0, 1)
+    noise = σ_white .* randn(rng, length(t)) .+ σ_walk .* cumsum(randn(rng, length(t)))
+    (wvf = RDWaveform(t, 20.0 .+ amplitude .* shape .+ noise), rise = rise)
+end
+
+pulses = [synthetic_pulse(rng, t) for _ in 1:400]
+drift = [p.rise for p in pulses]
+bl_window = 0.0u"µs" .. 80.0u"µs"
+wvfs = ArrayOfRDWaveforms([p.wvf for p in pulses])
+wvfs = shift_waveform.(wvfs, -[mean(w.signal[1:161]) for w in wvfs])   # baseline subtraction
+nothing # hide
+```
+
+`t50` is the time of half the maximum of the 10/10 µs trapezoid. The waveforms are aligned to the sample nearest the median `t50`, and a window of 101 samples (50 µs) around it gives the reference and the noise matrix. The flat-top matrix uses a widening of 6 samples (3 µs), and the drift-time bins are terciles of the rise time:
+
+```@example dplms
+e_101010 = extremestats.(TrapezoidalChargeFilter(10u"µs", 10u"µs").(wvfs)).max
+t50 = get_threshold(wvfs, 0.5 .* e_101010; mintot = 2.0u"µs")
+
+n_pre, n_post, ff = 40, 60, 6
+n = n_pre + n_post + 1
+t_target = t[findmin(abs.(t .- median(t50)))[2]]
+wvfs_aligned = align_waveforms(wvfs, t50, t_target)
+
+windows = aligned_windows(wvfs_aligned, t_target, n_pre, n_post)
+ref, plateau = dplms_reference(windows, (n - 19):n)
+noise = dplms_noise_matrix(wvfs, bl_window, n) ./ plateau^2
+bins = cld.(invperm(sortperm(drift)) .* 3, length(drift))
+binned = dplms_binned_reference(windows, bins, plateau)
+wide = aligned_windows(wvfs_aligned, t_target, n_pre + ff, n_post + ff)
+flattop = dplms_flattop_matrix(dplms_binned_reference(wide, bins, plateau).refs, ff)
+
+flt = dplms_synthesis(noise, ref, flattop, binned; nm = 1.0, za = 1e3, ft = 1.0, zo = 1e3)
+(noise_out = flt.noise_out, zero_area = flt.zero_area, output_area = flt.output_area)
+```
+
+The predicted output noise is in units of the plateau amplitude. The coefficient sum and the area of the output for a step are zero up to rounding. The energies of the DPLMS filter and of a trapezoid with 20 µs rise time and 10 µs flat top are read out with [`dsp_dplms_energy`](@ref). The trapezoid is given by the coefficients that [`get_dplms_pars`](@ref) builds for the default filter:
+
+```@example dplms
+estimator = SignalEstimator(PolynomialDNI(3, 2.0u"µs"))
+current_window = 80.0u"µs" .. 120.0u"µs"
+n_rt, n_ft = 40, 20
+trap = [fill(1 / n_rt, n_rt); zeros(n_ft); fill(-1 / n_rt, n_rt)]
+
+e_dplms = dsp_dplms_energy(wvfs, flt.coeffs, t50, n_post * dt, current_window, estimator).e
+e_trap = dsp_dplms_energy(wvfs, trap, t50, (n_rt + n_ft / 2) * dt, current_window, estimator).e
+
+Table(filter = ["DPLMS", "trapezoid"], mean = [mean(e_dplms), mean(e_trap)], width = [std(e_dplms), std(e_trap)])
+```
+
+All pulses have the same amplitude, so the width is the noise of the energy estimate. The width of the DPLMS energies agrees with `noise_out` times the plateau amplitude. For this noise, which has a random-walk component, the DPLMS filter gives the smaller width. The weights show the difference: the trapezoid weights the samples of its two averaging windows equally, whereas the DPLMS weights follow the noise and the pulse shape.
+
+```@example dplms
+using CairoMakie
+CairoMakie.activate!(type = "svg")
+
+# time of each weight relative to t50 when the filter is read out at t50 + t_pickoff
+t_weights(c, t_pickoff) = ustrip.(u"µs", t_pickoff .- (0:length(c)-1) .* dt)
+
+fig = Figure(size = (700, 320))
+ax = Axis(fig[1, 1], xlabel = "time of the weighted sample relative to t50 (µs)", ylabel = "weight")
+lines!(ax, t_weights(flt.coeffs, n_post * dt), flt.coeffs, label = "DPLMS")
+lines!(ax, t_weights(trap, (n_rt + n_ft / 2) * dt), trap, label = "trapezoid")
+axislegend(ax, position = :rt)
+fig
+```
 
 ## Role in the Production Dataflow
 

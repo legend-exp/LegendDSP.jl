@@ -77,7 +77,7 @@ The HPGe, pulser and auxiliary chains, the decay-time extraction and the filter 
 
 `dsp_puls`, `dsp_puls_compressed` use only `bl_window`. `dsp_aux` and `dsp_aux_compressed` accept a `DSPConfig` for a uniform call signature but do not read it.
 
-`default_flt_param` is a `PropDict` with the entries `sg` and `mwa` (window lengths) and `trap`, `zac`, `cusp` (each with `rt` and `ft`). The chains look up optimized values in the `pars_filter` argument first and use `default_flt_param` for every entry that `pars_filter` lacks.
+`default_flt_param` is a `PropDict` with the entries `sg` and `mwa` (window lengths) and `trap`, `zac`, `cusp` and `dplms` (each with `rt` and `ft`). The entry `dplms` is the trapezoid that [`dsp_icpc_compressed`](@ref) uses for `e_dplms` when `pars_filter` has no `dplms` entry (see [DPLMS Filter](@ref)); the chain throws an `ArgumentError` if neither exists. The chains look up optimized values in the `pars_filter` argument first and use `default_flt_param` for every entry that `pars_filter` lacks.
 
 `kwargs_pars` is a `PropDict` with the following entries:
 
@@ -132,6 +132,7 @@ pd = PropDict(
         :trap => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
         :zac => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
         :cusp => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
+        :dplms => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
     ),
     :kwargs_pars => PropDict(
         :fc_bit_depth => 16,

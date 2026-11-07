@@ -16,7 +16,7 @@ out = dsp_icpc_compressed(data, config, τ, pars_filter; f_evaluate_qc = missing
 | `data` | A `TypedTables.Table` with the raw columns listed below |
 | `config` | A [`DSPConfig`](@ref) |
 | `τ` | The decay time of the preamplifier signal as a Unitful time (for example `450.0u"µs"`). It sets the pole-zero correction. How `τ` is determined is described in [Decay Time](@ref) |
-| `pars_filter` | A `PropDict` with the optimized filter parameters of the channel (`trap`, `cusp`, `zac` with `rt` and `ft`; `sg` and `mwa` with `wl`). Missing entries are taken from `config.default_flt_param` |
+| `pars_filter` | A `PropDict` with the optimized filter parameters of the channel (`trap`, `cusp`, `zac` with `rt` and `ft`; `sg` and `mwa` with `wl`; for `dsp_icpc_compressed` also `dplms` with `coefficients` and `t_pickoff`). Missing entries are taken from `config.default_flt_param` |
 | `f_evaluate_qc` | Keyword. Either `missing` (default) or a function that evaluates a trained classifier, see [Quality-Cut Label](@ref) |
 
 The input columns are
@@ -81,6 +81,7 @@ config = DSPConfig(PropDict(
         :trap => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
         :zac => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
         :cusp => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
+        :dplms => PropDict(:rt => 5.0u"µs", :ft => 2.5u"µs"),
     ),
     :kwargs_pars => PropDict(
         :fc_bit_depth => 16,
@@ -235,6 +236,8 @@ A flat PZ-corrected tail has `tailslope` close to zero. A negative slope indicat
 | `t_10410`, `t_535`, `t_313`, `t_101010` (c) | Times of those maxima |
 | `e_trap`, `e_cusp`, `e_zac` | Energy from the trapezoidal, CUSP and ZAC filter with the optimized or default parameters, read at the pick-off time |
 | `e_trap_max`, `e_cusp_max`, `e_zac_max` | Maximum of the output of those filters |
+| `e_dplms` (c) | Energy from the DPLMS filter of `pars_filter.dplms`, read at `t50_pre + t_pickoff`; without `pars_filter.dplms`, the trapezoid of `config.default_flt_param.dplms`, see [DPLMS Filter](@ref) |
+| `e_dplms_max` (c) | Maximum of the DPLMS filter output in `config.current_window` shifted by `t_pickoff` |
 | `t_trap_max`, `t_cusp_max`, `t_zac_max` | Times of those maxima, in the unit of the time axis |
 | `e_10410_inv`, `e_313_inv` | Maximum of the 10/4 and 3/1 µs trapezoid on the inverted PZ-corrected waveform |
 

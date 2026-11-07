@@ -299,7 +299,7 @@ Energies, from the presummed waveform:
 - `t_10410`, `t_535`, `t_313`, `t_101010`: times of those maxima
 - `e_trap`, `e_cusp`, `e_zac`: value of the trapezoidal, CUSP and ZAC filtered waveform at `t50_pre + rt + ft/2` (trapezoidal) and `t50_pre + flt_length/2` (CUSP and ZAC), determined by a signal estimator, with the parameters as for [`dsp_icpc`](@ref)
 - `e_trap_max`, `e_cusp_max`, `e_zac_max`, `t_trap_max`, `t_cusp_max`, `t_zac_max`: maximum of the filtered waveform and its time
-- `e_dplms`: value of the presummed waveform filtered with the DPLMS filter of `pars_filter.dplms` at `t50_pre + t_pickoff`, determined by the signal estimator. Without `pars_filter.dplms`, the trapezoidal filter of `config.flt_defaults.dplms` is used, see [`get_dplms_pars`](@ref).
+- `e_dplms`: value of the presummed waveform filtered with the DPLMS filter of `pars_filter.dplms` at `t50_pre + t_pickoff`, determined by the signal estimator. Without `pars_filter.dplms`, the trapezoidal filter of `config.default_flt_param.dplms` is used, see [`get_dplms_pars`](@ref).
 - `e_dplms_max`: maximum of the DPLMS filtered waveform in `config.current_window` shifted by `t_pickoff`
 - `e_10410_inv`, `e_313_inv`: maximum after the `e_10410` and `e_313` filters of the presummed waveform multiplied by -1
 - `t0_inv`: t0 of the windowed waveform multiplied by -1, in µs, determined with the default `flt_pars` of [`get_t0`](@ref)

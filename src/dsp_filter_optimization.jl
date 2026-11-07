@@ -674,13 +674,25 @@ export dsp_mwa_optimization_compressed
 """
     dplms_default_grid(n_rise::Integer; nm = 1.0, za = 1e3, ft = 1.0, ct = 0.0, zo = 0.0, ff_factors = 1:4, ff = nothing)
 
-DPLMS grid of flat-top widenings `ff = k·n_rise` samples for `k` in `ff_factors`, or of the
-sample counts `ff` if given, for every
-output-area weight in `zo` (a number or a collection), all at the weights `nm`, `za`, `ft`,
-`ct` in units of the reference amplitude. Grid points are ordered by `zo`, then by `ff`. Only
-weight ratios matter, and in these units any `za` above about 1 already enforces zero area;
+Grid of DPLMS weights and flat-top widenings for [`dsp_dplms_optimization`](@ref).
+
+The widenings are `ff = k·n_rise` samples for `k` in `ff_factors`, or the sample counts `ff` if
+given. The grid holds every combination of `zo` (a number or a collection) and widening, all
+at the weights `nm`, `za`, `ft`, `ct`, ordered by `zo`, then by `ff`. Only weight ratios matter,
+and in units of the reference amplitude any `za` above about 1 already enforces zero area;
 `za = 0` switches the zero-area condition off. `zo = 0` leaves the area of the filter output
-free, `zo = 1e3` makes it zero.
+free, `zo = 1e3` makes it zero. See [`dplms_synthesis`](@ref) for the meaning of the weights.
+
+# Arguments
+- `n_rise`: number of samples of the signal rise, used to scale the widenings
+
+# Keywords
+- `nm`, `za`, `ft`, `ct`, `zo`: weights
+- `ff_factors`: multiples of `n_rise` for the widenings
+- `ff`: explicit widenings in samples; replaces `ff_factors`
+
+# Returns
+- vector of `NamedTuple`s `(nm, za, ft, ct, zo, ff)`, all weights `Float64` and `ff` an `Int`
 """
 function dplms_default_grid(n_rise::Integer; nm::Real = 1.0, za::Real = 1e3, ft::Real = 1.0, ct::Real = 0.0, zo = 0.0, ff_factors = 1:4, ff = nothing)
     ffs = isnothing(ff) ? [round(Int, k * n_rise) for k in ff_factors] : ff
@@ -692,9 +704,21 @@ export dplms_default_grid
     dsp_dplms_energy(wvfs::ArrayOfRDWaveforms, coeffs::AbstractVector, t50::AbstractVector, t_pickoff, current_window::ClosedInterval, signal_estimator::SignalEstimator)
 
 Apply the DPLMS filter `coeffs` to baseline-subtracted, pole-zero-corrected waveforms and read
-the energy at `t50 + t_pickoff` with `signal_estimator`. Returns `(e, emax)` with `emax` the
-maximum of the filter output inside `current_window` shifted by `t_pickoff`, where the read-out
-times of all events with `t50` inside `current_window` lie.
+the energy at `t50 + t_pickoff` with `signal_estimator`.
+
+The waveforms are decoded and filtered by `ConvolutionFilter(DirectConvolution(), coeffs)`.
+Throws if `coeffs` is longer than a waveform or if the axes of `wvfs` and `t50` differ.
+
+# Arguments
+- `wvfs`: waveforms, one time axis per waveform
+- `coeffs`: impulse response of the filter, for example `coeffs` of [`dplms_synthesis`](@ref) or `coefficients` of [`get_dplms_pars`](@ref)
+- `t50`: alignment time of every waveform
+- `t_pickoff`: read-out time after `t50`
+- `current_window`: time window of the signal rise
+- `signal_estimator`: `SignalEstimator` of RadiationDetectorDSP that reads the value at the read-out time
+
+# Returns
+- named tuple `(e, emax)`: energy at the read-out time, and the maximum of the filter output inside `current_window` shifted by `t_pickoff`, the interval that holds the read-out times of all events with `t50` inside `current_window`
 """
 function dsp_dplms_energy(wvfs::ArrayOfRDWaveforms, coeffs::AbstractVector, t50::AbstractVector, t_pickoff, current_window::ClosedInterval, signal_estimator::SignalEstimator)
     axes(wvfs) == axes(t50) || throw(DimensionMismatch("waveforms $(axes(wvfs)) and t50 times $(axes(t50)) differ"))
@@ -716,9 +740,9 @@ energies they give. A grid point is a `NamedTuple` with the weights `nm`, `za`, 
 and the flat-top widening `ff` in samples.
 
 Steps: baseline subtraction over `config.bl_window`; pole-zero correction with `InvCRFilter(τ)`;
-`t50`, the time where half of the current integral is reached: 50 % of the 10/10 µs trapezoid
-maximum, found with `get_threshold` (`config.kwargs_pars.tx_mintot`) as `t50_pre` in
-`dsp_icpc_compressed`; alignment of every waveform to the sample nearest the median `t50`;
+`t50`, the time where the waveform reaches 50 % of the maximum of the 10/10 µs trapezoid,
+found with `get_threshold` (`config.kwargs_pars.tx_mintot`) as `t50_pre` in
+[`dsp_icpc_compressed`](@ref); alignment of every waveform to the sample nearest the median `t50`;
 windows of `n_pre` samples before to `n_post` after that sample; noise matrix from the baseline
 window; reference and one reference per drift-time bin, the bins being `n_bins`
 quantiles of `drift`; flat-top matrix from the drift-bin references widened by `ff` samples.
@@ -744,6 +768,24 @@ references. The flat top is the interval around the read-out time where every fi
 reference stays within `flat_tol` of its value at the read-out time; the shaping time runs from
 the first sample where the filtered superpulse exceeds `flat_tol` to the start of the flat top.
 
+Throws if `t50` lies outside `config.current_window` for any waveform, if the drift proxies are not
+finite, or if a window or `plateau_length` does not fit.
+
+# Arguments
+- `wvfs`: presummed waveforms, possibly encoded, with one shared time axis
+- `config`: [`DSPConfig`](@ref) with `bl_window`, `current_window` and `kwargs_pars`
+- `τ`: decay time for the pole-zero correction
+- `drift`: drift-time proxy of every waveform, for example `drift_time`
+
+# Keywords
+- `n_pre`, `n_post`: window samples before and after the alignment sample
+- `n_noise_windows`: sliding windows per event reserved for the noise matrix when `n_pre` and `n_post` are not given
+- `ff_level`: fraction of the plateau that defines the end of the rise for `n_rise`
+- `n_bins`: number of drift-time bins
+- `plateau_length`: number of samples at the end of the window that define the reference amplitude
+- `flat_tol`: tolerance relative to the reference amplitude for `flat_top` and `shaping_time`
+- `grid`: vector of grid points or function of `n_rise` returning one
+
 # Returns
 - `e_grid`, `emax_grid`: energies and filter-output maxima, size `(length(grid), length(wvfs))`
 - `coeffs`: impulse response per grid point; `t_pickoff`
@@ -756,6 +798,8 @@ the first sample where the filtered superpulse exceeds `flat_tol` to the start o
 - `response`: `superpulse` filtered with `coeffs`, one `RDWaveform` per grid point
 - `noise`, `flattops`: the noise matrix and the flat-top matrix per `ff` (a `Dict`), in units of
   the reference amplitude
+
+All of these are fields of one named tuple.
 """
 function dsp_dplms_optimization(wvfs::ArrayOfRDWaveforms, config::DSPConfig, τ::Quantity{<:Real}, drift::AbstractVector;
         n_pre::Union{Integer,Nothing} = nothing, n_post::Union{Integer,Nothing} = nothing, n_noise_windows::Integer = 8,

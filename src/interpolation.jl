@@ -14,7 +14,7 @@ end
 
 Maximum of `signal` between `start` and `stop` and its time, from a parabola through the maximum sample and its two neighbors.
 
-The interval includes the samples nearest to `start` and `stop`. If the maximum sample is the first or last sample of the interval, its value and time are returned without interpolation.
+The interval includes the samples nearest to `start` and `stop`. If the maximum sample is the first or last sample of the interval, its value and time are returned without interpolation. Throws a `DimensionMismatch` if the time axis and the signal have different axes and an `ArgumentError` if the interval leaves the record.
 
 # Returns
 - named tuple `(max, t)`
