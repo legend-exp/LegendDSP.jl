@@ -1,53 +1,45 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    dsp_sipm(data::Q, config::PropDict, pars_threshold::PropDict)
+    dsp_sipm(data::Table, config::PropDict, pars_optimization::PropDict)
 
-DSP routine for SiPM data. It needs the threshold parameters from the threshold scan for the given SiPM channel as well as the discharge threshold parameters.
+DSP chain for SiPM waveforms. Returns a table with one row per waveform.
 
-# Input data
-The input data is a table with the following columns:
-- `waveform`: waveform data
-- `baseline`: baseline data
-- `timestamp`: timestamp data
-- `eventnumber`: event number data
-- `daqenergy`: energy data
+# Input columns
+`waveform`, `baseline`, `timestamp`, `eventnumber`, `daqenergy`
 
-# Output data
-The output data is a table with the following columns:
-- `blfc`: baseline from FADC
-- `timestamp`: timestamp
-- `eventID_fadc`: event number from FADC
-- `e_fc`: energy from FADC
-- `t_max`, `t_min`: time of waveform maximum/minimum
-- `t_max_lar`, `t_min_lar`: time of waveform maximum/minimum in LAr window
-- `e_max`, `e_min`: waveform maximum/minimum amplitude
-- `e_max_lar`, `e_min_lar`: waveform maximum/minimum amplitude in LAr window
-- `blmean`, `blsigma`, `blslope`, `bloffset`: baseline statistics
-- `wfmean`, `wfsigma`, `wfslope`, `wfoffset`: waveform statistics
-## SG filter columns
-- `threshold_sg`: SG trigger threshold
-- `threshold_DC_sg`: SG discharge trigger threshold
-- `trig_pos_sg`: SG trigger positions
-- `trig_max_sg`: SG trigger maxima
-- `trig_pos_DC_sg`: SG discharge trigger positions
-- `trig_max_DC_sg`: SG discharge trigger maxima
-## Trap filter columns
-- `threshold_trap`: trap trigger threshold
-- `threshold_DC_trap`: trap discharge trigger threshold
-- `trig_pos_trap`: trap trigger positions
-- `trig_pos_high_trap`: trap trigger high positions
-- `trig_pos_tot_trap`: trap trigger time-over-threshold positions
-- `trig_max_trap`: trap trigger maxima
-- `trig_pos_DC_trap`: trap discharge trigger positions
-- `trig_pos_high_DC_trap`: trap discharge trigger high positions
-- `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
-- `trig_max_DC_trap`: trap discharge trigger maxima
-## Cross-talk tag filter columns
-- `threshold_xt_tag`: threshold of the integrated long SG waveform
-- `trig_pos_xt_tag`, `trig_pos_high_xt_tag`: start and end of its regions above threshold
-- `trig_pos_tot_xt_tag`: time over threshold of the regions
-- `trig_max_xt_tag`: maxima of the regions
+# Arguments
+- `data`: table of waveforms; encoded columns are decoded with `decode_data`
+- `config`: `PropDict` with the entries `sg_flt_degree`, `t0_hpge_window` (start and stop of the window in which the HPGe signal is expected, used for the `_lar` parameters) and `filters`. `filters.sg` holds the settings of the Savitzky-Golay pipeline and `filters.trap` those of the trapezoidal pipeline. Both contain `min_tot_intersect`, `max_tot_intersect`, `min_threshold`, `max_threshold`, `n_σ_threshold`, `min_dc_threshold`, `max_dc_threshold` and `n_σ_dc_threshold`; `filters.trap` also contains `rt`, `ft` and `pz_tau`. `filters.xt_tag` holds the settings of the cross-talk tag pipeline: `window_length`, `n_σ_threshold`, `min_tot_intersect` and `max_tot_intersect`.
+- `pars_optimization`: `PropDict` with the optimized Savitzky-Golay window length `pars_optimization.sg.wl`
+
+# Output columns
+Times are in the unit of the waveform time axis unless noted.
+- `blfc`, `timestamp`, `eventID_fadc`, `e_fc`: baseline, timestamp, event number and energy from the FADC
+- `t_max`, `t_min`: times of the waveform maximum and minimum, in µs
+- `t_max_lar`, `t_min_lar`: the same within `t0_hpge_window`, in µs
+- `e_max`, `e_min`: waveform maximum and minimum
+- `e_max_lar`, `e_min_lar`: the same within `t0_hpge_window`
+- `blmean`, `blsigma`, `blslope`, `bloffset`: statistics of the integrated Savitzky-Golay derivative from the start of the waveform to the first Savitzky-Golay trigger (to the end of the waveform if there is none, but at least three samples)
+- `wfmean`, `wfsigma`, `wfslope`, `wfoffset`: the same statistics over the whole integrated waveform
+- `threshold_sg`: trigger threshold of the Savitzky-Golay pipeline
+- `threshold_DC_sg`: discharge threshold of the Savitzky-Golay pipeline
+- `trig_pos_sg`, `trig_max_sg`: times and maxima of the triggers, one vector per waveform
+- `trig_pos_DC_sg`, `trig_max_DC_sg`: times and maxima of the discharge triggers
+- `threshold_trap`, `threshold_DC_trap`: trigger and discharge thresholds of the trapezoidal pipeline
+- `trig_pos_trap`, `trig_pos_high_trap`, `trig_pos_tot_trap`, `trig_max_trap`: time, falling-edge time, time over threshold and maximum of the trapezoidal triggers
+- `trig_pos_DC_trap`, `trig_pos_high_DC_trap`, `trig_pos_tot_DC_trap`, `trig_max_DC_trap`: the same for the trapezoidal discharge triggers
+- `threshold_xt_tag`: threshold of the cross-talk tag pipeline
+- `trig_pos_xt_tag`, `trig_pos_high_xt_tag`, `trig_pos_tot_xt_tag`, `trig_max_xt_tag`: start time, end time, time over threshold and maximum of each region of the long-window integrated waveform that is above the threshold
+
+# Processing
+- The waveform is converted to `Float64`.
+- *Savitzky-Golay pipeline:* the waveform is filtered with a `SavitzkyGolayFilter(pars_optimization.sg.wl, config.sg_flt_degree, 1)`, which gives the smoothed derivative. The threshold is `n_σ_threshold` times [`thresholdstats_mad`](@ref) of the samples between `min_threshold` and `max_threshold`, and the triggers are found with [`IntersectMaximum`](@ref).
+- The derivative is integrated with `IntegratorFilter(gain=1)`, which gives a smoothed waveform, and the baseline statistics are determined on it.
+- *Discharge detection:* the median of the integrated waveform is taken as its baseline and subtracted, and the result is multiplied by -1. The thresholds are computed in the same way as above from the `dc` settings of `filters.sg`, and the triggers are found with the Savitzky-Golay `IntersectMaximum`.
+- *Trapezoidal pipeline:* the integrated waveform is pole-zero corrected with `pz_tau` and filtered with a `TrapezoidalChargeFilter(rt, ft)`. Thresholds and triggers are computed in the same way as for the Savitzky-Golay pipeline, with the settings of `filters.trap`.
+- *Trapezoidal discharge detection:* the thresholds are computed from the flipped, baseline-subtracted integrated waveform with the `dc` settings of `filters.trap`, and the triggers are found with the `IntersectMaximum` of the trapezoidal settings (`filters.trap.min_tot_intersect` and `max_tot_intersect`).
+- *Cross-talk tag pipeline:* the waveform is filtered with a `SavitzkyGolayFilter(filters.xt_tag.window_length, config.sg_flt_degree, 1)` and integrated, and the median of the result is subtracted. The threshold is `filters.xt_tag.n_σ_threshold` times [`thresholdstats_mad`](@ref) of all samples, without lower and upper bounds. The regions above the threshold are found with an `IntersectMaximum(filters.xt_tag.min_tot_intersect, filters.xt_tag.max_tot_intersect)`; the waveform is not flipped.
 """
 function dsp_sipm(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # common config
@@ -185,53 +177,12 @@ export dsp_sipm
 
 
 """
-    dsp_sipm_compressed(data::Q, config::PropDict, pars_threshold::PropDict)
+    dsp_sipm_compressed(data::Table, config::PropDict, pars_optimization::PropDict)
 
-DSP routine for SiPM data. It needs the threshold parameters from the threshold scan for the given SiPM channel as well as the discharge threshold parameters.
+Variant of [`dsp_sipm`](@ref) for compressed data. The waveform is read from the column `waveform_bit_drop` instead of `waveform`; the arguments, the processing and the output columns, including the cross-talk tag columns, are the same as for `dsp_sipm`.
 
-# Input data
-The input data is a table with the following columns:
-- `waveform`: waveform data
-- `baseline`: baseline data
-- `timestamp`: timestamp data
-- `eventnumber`: event number data
-- `daqenergy`: energy data
-
-# Output data
-The output data is a table with the following columns:
-- `blfc`: baseline from FADC
-- `timestamp`: timestamp
-- `eventID_fadc`: event number from FADC
-- `e_fc`: energy from FADC
-- `t_max`, `t_min`: time of waveform maximum/minimum
-- `t_max_lar`, `t_min_lar`: time of waveform maximum/minimum in LAr window
-- `e_max`, `e_min`: waveform maximum/minimum amplitude
-- `e_max_lar`, `e_min_lar`: waveform maximum/minimum amplitude in LAr window
-- `blmean`, `blsigma`, `blslope`, `bloffset`: baseline statistics
-- `wfmean`, `wfsigma`, `wfslope`, `wfoffset`: waveform statistics
-## SG filter columns
-- `threshold_sg`: SG trigger threshold
-- `threshold_DC_sg`: SG discharge trigger threshold
-- `trig_pos_sg`: SG trigger positions
-- `trig_max_sg`: SG trigger maxima
-- `trig_pos_DC_sg`: SG discharge trigger positions
-- `trig_max_DC_sg`: SG discharge trigger maxima
-## Trap filter columns
-- `threshold_trap`: trap trigger threshold
-- `threshold_DC_trap`: trap discharge trigger threshold
-- `trig_pos_trap`: trap trigger positions
-- `trig_pos_high_trap`: trap trigger high positions
-- `trig_pos_tot_trap`: trap trigger time-over-threshold positions
-- `trig_max_trap`: trap trigger maxima
-- `trig_pos_DC_trap`: trap discharge trigger positions
-- `trig_pos_high_DC_trap`: trap discharge trigger high positions
-- `trig_pos_tot_DC_trap`: trap discharge trigger time-over-threshold positions
-- `trig_max_DC_trap`: trap discharge trigger maxima
-## Cross-talk tag filter columns
-- `threshold_xt_tag`: threshold of the integrated long SG waveform
-- `trig_pos_xt_tag`, `trig_pos_high_xt_tag`: start and end of its regions above threshold
-- `trig_pos_tot_xt_tag`: time over threshold of the regions
-- `trig_max_xt_tag`: maxima of the regions
+# Input columns
+`waveform_bit_drop`, `baseline`, `timestamp`, `eventnumber`, `daqenergy`
 """
 function dsp_sipm_compressed(data::Q, config::PropDict, pars_optimization::PropDict) where {Q <: Table}
     # common config
