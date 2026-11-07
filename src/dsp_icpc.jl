@@ -304,6 +304,8 @@ The output data is a table with the following columns:
 - `e_trap`: energy of waveform with trapezoidal filter of optimized rise and flat-top time
 - `e_cusp`: energy of waveform with CUSP filter of optimized rise and flat-top time
 - `e_zac`: energy of waveform with ZAC filter of optimized rise and flat-top time
+- `e_dplms`: energy of waveform with the optimized DPLMS filter (`pars_filter.dplms`), or the trapezoidal filter of `flt_defaults.dplms` if there is none, read out at `t50_pre + t_pickoff`
+- `e_dplms_max`: maximum of the DPLMS filter output inside the current window shifted by `t_pickoff`
 - `qdrift`: Q-drift parameter
 - `lq80_<early><gap><late>`, `lq90_…`, `lqamax_…`: LQ parameters from `t80`, `t90` and `t_amax`, charge in the late window minus charge in the early window, one column per `[early, gap, late]` of `lq_windows` in the config (lengths in 0.1 µs, e.g. `lq80_250025`: 2.5 µs early, no gap, 2.5 µs late)
 - `blfc`: baseline from FADC
@@ -460,6 +462,10 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
     e_zac = signal_estimator.(wvfs_flt, t50_pre .+ (flt_length_zac /2))
     e_zac_extremestats = extremestats.(wvfs_flt)
 
+    # get DPLMS energy of the optimized filter, or of the default trapezoid
+    dplms = get_dplms_pars(pars_filter, config, step(first(wvfs_pre.time)))
+    e_dplms, e_dplms_max = dsp_dplms_energy(wvfs_pre, dplms.coefficients, t50_pre, dplms.t_pickoff, current_window, signal_estimator)
+
     # extract current with optimal SG filter length with second order polynominal and first derivative
     a_raw = get_a(wvfs_deriv, current_window).max
     a_mwa_max = get_a(MovingWindowMultiFilter(mwa_wl; passes = config.a_mwa_passes).(wvfs_deriv), current_window)
@@ -522,6 +528,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         t_10410 = e_10410_stats.tmax, t_535 = e_535_stats.tmax, t_313 = e_313_stats.tmax, t_101010 = e_101010_stats.tmax,
         e_trap = e_trap, e_cusp = e_cusp, e_zac = e_zac,
         e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
+        e_dplms = e_dplms, e_dplms_max = e_dplms_max,
         t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
         # Qdrift & LQ
         qdrift = qdrift, lq80..., lq90..., lqamax...,

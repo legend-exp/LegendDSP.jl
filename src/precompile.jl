@@ -41,7 +41,7 @@
         :a_mwa_passes  => 3,
         :a_sg_windows  => [60.0u"ns", 100.0u"ns"],
         :flt_defaults  => PropDict(:sg => 100.0u"ns", :mwa => 96.0u"ns",
-                                   :trap => flt_default, :zac => flt_default, :cusp => flt_default),
+                                   :trap => flt_default, :zac => flt_default, :cusp => flt_default, :dplms => flt_default),
         :kwargs_pars => PropDict(
             :fc_bit_depth             => 16,
             :t0_flt_pars              => [40.0u"ns", 100.0u"ns", 2000.0u"ns"],
