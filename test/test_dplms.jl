@@ -375,4 +375,10 @@ end
     @test_throws "flt_defaults.dplms" get_dplms_pars(PropDict(), DSPConfig(pd_nodefault), Δt)
     @test_throws "no coefficients" get_dplms_pars(PropDict(:dplms => PropDict(:coefficients => Float64[], :t_pickoff => 1.0u"µs")), config, Δt)
     @test_throws "no t_pickoff" get_dplms_pars(PropDict(:dplms => PropDict(:coefficients => [1.0])), config, Δt)
+    @test_throws "must be a PropDict" get_dplms_pars(PropDict(:dplms => 1.0), config, Δt)
+    for malformed in (5.0u"µs", PropDict(:rt => 5.0u"µs"), PropDict(:rt => 5.0u"µs", :ft => 3.0))
+        pd_malformed = make_fake_config_pd()
+        pd_malformed.flt_defaults.dplms = malformed
+        @test_throws "flt_defaults.dplms" get_dplms_pars(PropDict(), DSPConfig(pd_malformed), Δt)
+    end
 end

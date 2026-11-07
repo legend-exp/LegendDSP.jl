@@ -126,6 +126,43 @@ end
     @test_throws "10000 DPLMS coefficients do not fit into waveforms of 8192 samples" dsp_icpc_compressed(data, config, τ, too_long)
 end
 
+@testset "dsp_icpc_compressed without DPLMS configuration" begin
+    data   = make_fake_data(3)
+    τ      = 500u"µs"
+    config = make_fake_config()
+    pd_nodplms = make_fake_config_pd()
+    delete!(pd_nodplms.flt_defaults, :dplms)
+    config_nodplms = DSPConfig(pd_nodplms)
+    dplms_columns = (:e_dplms, :e_dplms_max)
+
+    with_dplms = dsp_icpc_compressed(data, config, τ, PropDict())
+    without = dsp_icpc_compressed(data, config_nodplms, τ, PropDict())
+
+    # no DPLMS columns, all other columns identical and in the same order
+    @test !any(in(columnnames(without)), dplms_columns)
+    @test collect(columnnames(without)) == filter(!in(dplms_columns), collect(columnnames(with_dplms)))
+    for col in columnnames(without)
+        @test isequal(getproperty(without, col), getproperty(with_dplms, col))
+    end
+
+    # a stored DPLMS filter does not need flt_defaults.dplms
+    stored = PropDict(:dplms => PropDict(:coefficients => fill(1 / 64, 64), :t_pickoff => 2.0u"µs"))
+    r_stored = dsp_icpc_compressed(data, config_nodplms, τ, stored)
+    @test all(in(columnnames(r_stored)), dplms_columns)
+    @test isequal(r_stored.e_dplms, dsp_icpc_compressed(data, config, τ, stored).e_dplms)
+
+    # a present but malformed DPLMS entry is an error, not a skipped column
+    @test_throws "must be a PropDict" dsp_icpc_compressed(data, config_nodplms, τ, PropDict(:dplms => 1.0))
+    @test_throws "no t_pickoff" dsp_icpc_compressed(data, config_nodplms, τ, PropDict(:dplms => PropDict(:coefficients => [1.0])))
+    pd_malformed = make_fake_config_pd()
+    pd_malformed.flt_defaults.dplms = 5.0u"µs"
+    @test_throws "flt_defaults.dplms" dsp_icpc_compressed(data, DSPConfig(pd_malformed), τ, PropDict())
+
+    # dsp_icpc has no DPLMS output
+    result = dsp_icpc(make_fake_uncompressed_data(3), config_nodplms, τ, PropDict())
+    @test !any(in(columnnames(result)), dplms_columns)
+end
+
 @testset "dsp_icpc" begin
     data = make_fake_uncompressed_data(3)
     config = make_fake_config()

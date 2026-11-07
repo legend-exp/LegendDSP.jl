@@ -96,15 +96,24 @@ DPLMS filter for `dsp_dplms_energy` as `(; coefficients, t_pickoff)`, with `t_pi
 read-out time after `t50`. Returns `pd.dplms` if present. Otherwise builds the trapezoidal
 filter of `config.default_flt_param.dplms` (`rt`, `ft`) sampled at `Δt`, read out at
 `rt + ft/2`; it gives the same energies as `TrapezoidalChargeFilter(rt, ft)`.
+
+Throws an `ArgumentError` if neither `pd.dplms` nor `config.default_flt_param.dplms` exists, or if
+the one that is used is malformed.
 """
 function get_dplms_pars(pd::PropDict, config::DSPConfig, Δt::Unitful.Time)
     if haskey(pd, :dplms)
+        pd.dplms isa PropDict || throw(ArgumentError("DPLMS parameters must be a PropDict, got $(typeof(pd.dplms))"))
         haskey(pd.dplms, :t_pickoff) || throw(ArgumentError("DPLMS parameters have no t_pickoff"))
         isempty(get(pd.dplms, :coefficients, [])) && throw(ArgumentError("DPLMS parameters have no coefficients"))
         return (coefficients = Float64.(pd.dplms.coefficients), t_pickoff = pd.dplms.t_pickoff)
     end
     haskey(config.default_flt_param, :dplms) || throw(ArgumentError("no DPLMS parameters and no default filter in flt_defaults.dplms of the DSP config"))
-    (; rt, ft) = config.default_flt_param.dplms
+    default = config.default_flt_param.dplms
+    default isa PropDict && haskey(default, :rt) && haskey(default, :ft) ||
+        throw(ArgumentError("flt_defaults.dplms of the DSP config must be a PropDict with rt and ft, got $default"))
+    (; rt, ft) = default
+    (rt isa Unitful.Time && ft isa Unitful.Time) ||
+        throw(ArgumentError("flt_defaults.dplms.rt and ft of the DSP config must be times, got $rt and $ft"))
     n_rt, n_ft = round(Int, rt / Δt), round(Int, ft / Δt)
     n_rt > 0 || throw(ArgumentError("default DPLMS rise time $rt is shorter than the sampling interval $Δt"))
     (coefficients = [fill(1 / n_rt, n_rt); zeros(n_ft); fill(-1 / n_rt, n_rt)], t_pickoff = rt + ft / 2)
