@@ -77,6 +77,13 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         )
 end
 
+"""
+    get_fltpars(pd::PropDict, flt::Symbol, dspconfig::DSPConfig)
+
+Filter parameters for the filter `flt` from `pd`, with missing entries taken from `dspconfig.default_flt_param`.
+
+Returns the window length `pd.sg.wl` or `pd.mwa.wl` for `flt` equal to `:sg` or `:mwa`, and the tuple `(rt, ft)` of rise time and flat-top time for `:trap`, `:cusp` and `:zac`.
+"""
 function get_fltpars(pd::PropDict, flt::Symbol, dspconfig::DSPConfig)
     if flt == :sg || flt == :mwa
         return get(get(pd, flt, PropDict()), :wl, dspconfig.default_flt_param[flt])
@@ -92,10 +99,19 @@ end
 """
     get_dplms_pars(pd::PropDict, config::DSPConfig, Δt::Unitful.Time)
 
-DPLMS filter for `dsp_dplms_energy` as `(; coefficients, t_pickoff)`, with `t_pickoff` the
-read-out time after `t50`. Returns `pd.dplms` if present. Otherwise builds the trapezoidal
-filter of `config.default_flt_param.dplms` (`rt`, `ft`) sampled at `Δt`, read out at
-`rt + ft/2`; it gives the same energies as `TrapezoidalChargeFilter(rt, ft)`.
+DPLMS filter for [`dsp_dplms_energy`](@ref) as `(; coefficients, t_pickoff)`, with `t_pickoff` the
+read-out time after `t50`.
+
+Returns the entries `coefficients` and `t_pickoff` of `pd.dplms` if present. Otherwise builds the
+trapezoidal filter of `config.default_flt_param.dplms` (`rt`, `ft`) sampled at `Δt`, read out at
+`rt + ft/2`; it gives the same energies as `TrapezoidalChargeFilter(rt, ft)`. Throws an
+`ArgumentError` if `pd.dplms` lacks `coefficients` or `t_pickoff`, if there is neither `pd.dplms` nor
+`config.default_flt_param.dplms`, or if the default rise time is shorter than `Δt`.
+
+# Arguments
+- `pd`: filter parameters of the detector, as `pars_filter` of [`dsp_icpc_compressed`](@ref)
+- `config`: [`DSPConfig`](@ref)
+- `Δt`: sampling interval of the presummed waveforms
 """
 function get_dplms_pars(pd::PropDict, config::DSPConfig, Δt::Unitful.Time)
     if haskey(pd, :dplms)

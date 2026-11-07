@@ -1,11 +1,16 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
 """
-    struct DerivativeFilter <: AbstractRadIIRFilter
+    struct DerivativeFilter{T<:RealQuantity} <: AbstractRadIIRFilter
+
+Backward difference of a signal: `y[i] = gain * (x[i] - x[i-1])`, and `y[1] = gain * (x[2] - x[1])` for the first sample.
+
+The difference is not divided by the sampling step, so the result is the change per sample times `gain`. The time axis is not changed.
 
 Working example:
 ```julia
 using LegendDSP
+using RadiationDetectorSignals
 using Unitful
 
 signal = rand(100)

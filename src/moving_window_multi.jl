@@ -3,10 +3,12 @@ import RadiationDetectorDSP: AbstractConvFilterInstance,
     AbstractRadSigFilterInstance, LinearFiltering, _filterlen, _floattype
 
 """
-    struct MovingWindowMultiFilter <: AbstractRadFIRFilter
+    struct MovingWindowMultiFilter{T<:RealQuantity} <: AbstractRadFIRFilter
 
-apply `passes` moving average windows of size `length` to the signal, alternating forward and backward in time
-(left, right, left for the default three passes; an even number of passes is symmetric).
+Apply `passes` moving average windows of size `length` to the signal, alternating forward and backward in time.
+
+With the default three passes the directions are forward, backward, forward. An even number of passes is symmetric in time. Each pass is a [`MovingWindowFilter`](@ref). An `ArgumentError` is thrown for `passes < 1`.
+
 Working example:
 ```julia
 using RadiationDetectorSignals
@@ -16,8 +18,8 @@ signal = rand(100)
 t = range(0u"ms", 20u"ms", 100)
 
 wf = RDWaveform(t, signal)
-flt = MovingWindowMultiFilter(1u"ms")              # three passes left, right, left
-flt = MovingWindowMultiFilter(1u"ms"; passes = 2)  # left, right
+flt = MovingWindowMultiFilter(1u"ms")              # three passes: forward, backward, forward
+flt = MovingWindowMultiFilter(1u"ms"; passes = 2)  # forward, backward
 wf_new = flt(wf)
 ```
 Constructors:
@@ -47,14 +49,30 @@ struct MovingWindowMultiFilterInstance{T} <: AbstractRadSigFilterInstance{Linear
 end
 
 """
-    struct MovingWindowFilter <: AbstractRadFIRFilter
+    struct MovingWindowFilter{T<:RealQuantity} <: AbstractRadFIRFilter
 
-apply left moving average window to signal. The exact computations
-are:\\
-        yₙ = yₙ₋₁ + (xₙ - x₁)/l,    for n ∈ {1, …, l}\\
-        yₙ = yₙ₋₁ + (xₙ - xₙ₋ₗ)/l,    for n ∈ {l+1, …, L}\\
+Causal moving average of a signal over a window of `length`.
 
-    
+With the window length `l` in samples (`length` divided by the step of the time axis, rounded) and `L` samples, the output is
+
+    y₁ = x₁
+    yₙ = yₙ₋₁ + (xₙ - x₁)/l,       for n ∈ {2, …, l}
+    yₙ = yₙ₋₁ + (xₙ - xₙ₋ₗ)/l,     for n ∈ {l+1, …, L}
+
+which equals a moving average over the `l` latest samples with the signal extended to the left by its first sample. The time axis is not changed.
+
+Working example:
+```julia
+using RadiationDetectorSignals
+using Unitful
+
+signal = rand(100)
+t = range(0u"ms", 20u"ms", 100)
+
+wf = RDWaveform(t, signal)
+flt = MovingWindowFilter(1u"ms")
+wf_new = flt(wf)
+```
 Constructors:
 
 * ```$(FUNCTIONNAME)(; fields...)```

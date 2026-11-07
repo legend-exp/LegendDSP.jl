@@ -1,12 +1,26 @@
 
 """
-struct MultiIntersect <: Function
-    Finds the x values at which a signal exceeds the provided 
-    `threshold_ratios` the first time. 
-    Constructors:
-    * ```$(FUNCTIONNAME)(; fields...)```
-    Fields:
-    $(TYPEDFIELDS)
+    struct MultiIntersect{T<:RealQuantity} <: Function
+
+Find the first times at which a signal reaches given fractions of its maximum.
+
+For each ratio in `threshold_ratios`, the threshold is that ratio times the maximum of the signal. The first position where the signal stays at or above the threshold for at least `mintot` is refined: a polynomial of degree `d` is fitted to the `2n` samples around it, evaluated on a grid with `sampling_rate` times as many points, and searched for the threshold crossing. The thresholds are searched in the order given, each starting at the position found for the previous one, so the ratios should be ascending. An `AssertionError` is thrown if the fit window would reach beyond the signal.
+
+Call an instance as
+
+    (f::MultiIntersect)(signal::SamplesOrWaveform)
+
+It returns a vector with one crossing time per ratio, and an array of zeros for an empty signal.
+
+`mintot` is converted to a number of samples using the step of the time axis. For a time axis with a unit it needs to be a quantity of the same dimension; the default of 4 is a plain number.
+
+Constructors:
+
+* ```$(FUNCTIONNAME)(; fields...)```
+
+Fields:
+
+$(TYPEDFIELDS)
 """
 Base.@kwdef struct MultiIntersect{T<:RadiationDetectorDSP.RealQuantity} <: Function 
     "ratios which determine the thresholds"

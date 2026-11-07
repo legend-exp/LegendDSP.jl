@@ -1,5 +1,33 @@
 # This file is a part of LegendDSP.jl, licensed under the MIT License (MIT).
 
+"""
+    dsp_pmts(data::Table, config::PropDict)
+
+DSP chain for PMT waveforms. Returns a table with one row per waveform.
+
+The time axis is replaced using [`TimeAxisFilter`](@ref), the baseline is subtracted, and the extrema, triggers, saturation and the extrema of a smoothed waveform are determined.
+
+# Arguments
+`config` needs the entries
+- `time_axis_step_length`: sampling period of the new time axis
+- `baseline_window_start`, `baseline_window_end`: baseline window
+- `min_tot_intersect`, `max_tot_intersect`, `intersect_threshold`: minimum time over threshold, maximum time over threshold for the maximum, and threshold of the trigger search with [`IntersectMaximum`](@ref)
+- `wsg_window_length`, `wsg_flt_degree`, `wsg_weight`: window length, polynomial degree and weight type of the smoothing filter. For `wsg_weight == 0` this is a `SavitzkyGolayFilter` without derivative, otherwise a [`WeightedSavitzkyGolayFilter`](@ref)
+- `saturation_limit_low`, `saturation_limit_high`: sample values counted as saturated
+
+# Input columns
+`waveform`, `timestamp`, `channel`, `eventnumber`, `daqenergy`
+
+# Output columns
+- `timestamp`, `eventID_fadc`, `e_fc`, `channel`: from the input
+- `raw_pulse_height`, `raw_pulse_low`: maximum and minimum of the baseline-subtracted waveform
+- `raw_t0_hi`, `raw_t0_low`: times of that maximum and minimum
+- `trig_max`, `trig_t`: maxima and times of the triggers above `intersect_threshold`, one vector per waveform
+- `trig_mult`: number of triggers
+- `sat_low`, `sat_high`: number of samples of the unsubtracted waveform equal to `saturation_limit_low` and `saturation_limit_high`
+- `pulse_height`, `pulse_low`, `t0_hi`, `t0_low`: the same as the `raw_` values, determined on the smoothed waveform
+- `bl_mean`, `bl_sigma`, `bl_slope`: baseline statistics in the baseline window
+"""
 function dsp_pmts(data::Q, config::PropDict) where {Q <: Table}
     # get dsp meta parameters
     time_axis_step_length = config.time_axis_step_length
