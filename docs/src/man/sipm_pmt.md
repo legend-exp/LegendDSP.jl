@@ -60,9 +60,10 @@ The steps are:
 2. A Savitzky-Golay filter of window length `pars_optimization.sg.wl`, polynomial degree `sg_flt_degree` and derivative order 1 yields the smoothed derivative of the waveform. This is the SG branch.
 3. The SG threshold is `n_σ_threshold` times the median-absolute-deviation estimate of the noise ([`thresholdstats_mad`](@ref)) of the samples of the derivative that lie between `min_threshold` and `max_threshold`. [`IntersectMaximum`](@ref) finds all up-crossings of this threshold and the maximum of the derivative after each crossing.
 4. The derivative is integrated again (`IntegratorFilter`), which gives a baseline-corrected waveform. The baseline statistics are determined on the integrated waveform from its start to the first trigger, but at least over three samples. The waveform statistics are determined over the whole integrated waveform (`signalstats`).
-5. Discharges are detected on the integrated waveform multiplied by -1. The threshold is `n_σ_dc_threshold` times the median-absolute-deviation estimate of the samples between `min_dc_threshold` and `max_dc_threshold`, and the crossings are found with [`IntersectMaximum`](@ref).
+5. Discharges are detected on the flipped integrated waveform: the median of the integrated waveform (its baseline) is subtracted and the result is multiplied by -1. A discharge therefore appears as a rise above the baseline of its own waveform, independent of the offset of the integrated waveform. The threshold is `n_σ_dc_threshold` times the median-absolute-deviation estimate of the samples of the flipped waveform between `min_dc_threshold` and `max_dc_threshold`, and the crossings are found with [`IntersectMaximum`](@ref).
 6. The trap branch applies the pole-zero correction `InvCRFilter(pz_tau)` and a `TrapezoidalChargeFilter(rt, ft)` to the integrated waveform. Triggers are found as in the SG branch with the thresholds of the trap section of the configuration.
-7. The discharge detection of the trap branch is made on the flipped integrated waveform with its own thresholds. It uses the [`IntersectMaximum`](@ref) object that is built from the settings of the SG section (`min_tot_intersect` and `max_tot_intersect`).
+7. The discharge detection of the trap branch is made on the same flipped integrated waveform with its own thresholds (`filters.trap.min_dc_threshold`, `filters.trap.max_dc_threshold`, `filters.trap.n_σ_dc_threshold`). It uses the [`IntersectMaximum`](@ref) object of the trap branch (`filters.trap.min_tot_intersect` and `filters.trap.max_tot_intersect`).
+8. The cross-talk tag filter applies a Savitzky-Golay derivative filter with the long window `filters.xt_tag.window_length` (polynomial degree `sg_flt_degree`, derivative order 1) to the waveform and integrates the result. The median of the integrated waveform is subtracted. The threshold is `filters.xt_tag.n_σ_threshold` times the median-absolute-deviation estimate of all samples of this waveform (no bounds), and [`IntersectMaximum`](@ref) with `filters.xt_tag.min_tot_intersect` and `filters.xt_tag.max_tot_intersect` returns the regions above the threshold. A region spans at least the window length. Its time over threshold increases with the amplitude and duration of the excursion of the waveform, so long regions mark large or broad signals.
 
 ### Configuration
 
@@ -77,6 +78,9 @@ The steps are:
 - `filters.trap.rt`, `filters.trap.ft`: rise time and flat-top time of the trapezoidal filter.
 - `filters.trap.pz_tau`: decay time of the pole-zero correction.
 - `filters.trap.min_tot_intersect`, `filters.trap.max_tot_intersect`, `filters.trap.min_threshold`, `filters.trap.max_threshold`, `filters.trap.n_σ_threshold`, `filters.trap.min_dc_threshold`, `filters.trap.max_dc_threshold`, `filters.trap.n_σ_dc_threshold`: the corresponding values for the trap branch.
+- `filters.xt_tag.window_length`: window length of the Savitzky-Golay filter of the cross-talk tag filter (time). It is longer than `pars_optimization.sg.wl`.
+- `filters.xt_tag.n_σ_threshold`: factor between noise estimate and threshold of the cross-talk tag filter.
+- `filters.xt_tag.min_tot_intersect`, `filters.xt_tag.max_tot_intersect`: minimum time over threshold and window for the maximum of the cross-talk tag regions (times of the same unit).
 
 `pars_optimization` provides the optimized window length as `pars_optimization.sg.wl`.
 The scan that determines it is described [below](@ref "SiPM Parameter Scans").
@@ -99,8 +103,10 @@ The output table has the following columns.
 | `threshold_trap`, `threshold_DC_trap` | thresholds of the trap branch |
 | `trig_pos_trap`, `trig_pos_high_trap`, `trig_pos_tot_trap`, `trig_max_trap` | position, down-crossing position, time over threshold, and maximum of the trap triggers |
 | `trig_pos_DC_trap`, `trig_pos_high_DC_trap`, `trig_pos_tot_DC_trap`, `trig_max_DC_trap` | the same for the trap discharge triggers |
+| `threshold_xt_tag` | threshold of the cross-talk tag filter |
+| `trig_pos_xt_tag`, `trig_pos_high_xt_tag`, `trig_pos_tot_xt_tag`, `trig_max_xt_tag` | start, end, time over threshold, and maximum of the regions above the threshold of the cross-talk tag filter (vectors per event); the maximum is searched within `filters.xt_tag.max_tot_intersect` after the start |
 
-The trigger columns hold one vector per event, stored as a `VectorOfVectors`; the number of triggers is the length of the vector.
+The trigger columns hold one vector per event, stored as a `VectorOfVectors`; the number of triggers is the length of the vector. The first-trigger bound of the baseline window (step 4) uses the SG triggers only.
 
 ```@example sipm_pmt
 sipm_cfg = PropDict(
@@ -118,12 +124,22 @@ sipm_cfg = PropDict(
             :min_threshold => -50.0, :max_threshold => 50.0, :n_σ_threshold => 5.0,
             :min_dc_threshold => -50.0, :max_dc_threshold => 50.0, :n_σ_dc_threshold => 5.0,
         ),
+        :xt_tag => PropDict(
+            :window_length => 1000u"ns", :n_σ_threshold => 3.0,
+            :min_tot_intersect => 100u"ns", :max_tot_intersect => 1000u"ns",
+        ),
     ),
 )
 pars_sipm = PropDict(:sg => PropDict(:wl => 0.3u"µs"))
 
 sipm_out = dsp_sipm(data, sipm_cfg, pars_sipm)
 (length.(sipm_out.trig_pos_sg), round.(u"µs", sipm_out.trig_pos_sg[2], digits = 2))
+```
+
+The columns `trig_pos_xt_tag` and `trig_pos_tot_xt_tag` give the start and the time over threshold of each region of the long-window waveform for the three events:
+
+```@example sipm_pmt
+[(round.(u"µs", sipm_out.trig_pos_xt_tag[i], digits = 2), round.(u"µs", sipm_out.trig_pos_tot_xt_tag[i], digits = 2)) for i in 1:3]
 ```
 
 `dsp_sipm_compressed` returns the same table when it is given the same data:

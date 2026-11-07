@@ -175,13 +175,7 @@ Table(amplitude = amplitudes, e_trap = out_c.e_trap, e_trap_over_rate = out_c.e_
 
 The energies of the compressed variant are in units of presummed ADC counts, `presum_rate` times larger than the ADC amplitude. The time points `t0` to `t99` come from the windowed waveform and `t50_pre` from the presummed waveform; the latter has a coarser time resolution.
 
-Pulser and auxiliary channels are processed by the shorter chains:
-
-```@example dsp_chains
-puls = dsp_puls(raw, config)
-aux = dsp_aux(raw, config)
-(puls_columns = columnnames(puls), aux_columns = columnnames(aux))
-```
+Pulser and auxiliary channels are processed by the shorter chains described in [Pulser and Auxiliary Chains](@ref).
 
 ## Output Columns
 
@@ -285,6 +279,10 @@ out_qc.qc_label |> collect
 
 ## Pulser and Auxiliary Chains
 
+Besides the HPGe detectors, the LEGEND-200 data acquisition records channels that are not detectors. A test pulser injects charge pulses of a fixed shape and amplitude at regular intervals; its analog output is digitized like a detector channel and shows a step with an exponential tail. Auxiliary channels carry digital or analog signals of the data acquisition and the veto systems. Their waveforms are short spikes on a constant baseline. Examples are the baseline channel, which is read out by forced triggers and records the electronic baseline without a signal, and the muon veto channel. These channels have no pole-zero correction, no filter optimization, and no energy calibration from a gamma line. Their DSP output is used to select events, for example to identify pulser events and forced-trigger events and to check the trigger thresholds and timing.
+
+The production dataflow selects the chain of each channel in the section `additional_detectors` of the DSP configuration. The section maps a channel name to the name of a LegendDSP.jl function. In the production configuration, one analog pulser channel uses `dsp_puls_compressed`; the baseline channel, the muon veto channel and a further pulser channel use `dsp_aux_compressed`. The section `raw_fields` lists the raw columns that each function reads. The functions take the same [`DSPConfig`](@ref) as the HPGe chains (see [Use in Juleana.jl](@ref)).
+
 | Function | Reads | Output columns |
 |:---------|:------|:---------------|
 | [`dsp_puls`](@ref) | `waveform` | `blmean`, `blsigma`, `blslope`, `bloffset` (baseline in `bl_window`), `t50` (µs, time of half of the baseline-subtracted maximum), `e_max` (maximum), `e_10410` (maximum of the 10 µs/4 µs trapezoid), and the FADC values |
@@ -292,4 +290,69 @@ out_qc.qc_label |> collect
 | [`dsp_aux`](@ref) | `waveform` | `e_max` (maximum minus the FADC baseline `baseline`), `t_max` (time of the maximum), and the FADC values |
 | [`dsp_aux_compressed`](@ref) | `waveform_presummed` | `e_max` (maximum minus `baseline * presum_rate`), `t_max`, and the FADC values |
 
-The pulser chains read `bl_window` of the configuration; the auxiliary chains do not read the configuration. `dsp_aux` and `dsp_aux_compressed` are meant for channels whose waveforms are spikes, such as veto channels.
+All four functions take a table with the columns `baseline`, `timestamp`, `eventnumber`, `daqenergy` and the waveform column of the table; `dsp_aux_compressed` also needs `presum_rate`. The FADC values `baseline`, `timestamp`, `eventnumber` and `daqenergy` are copied to the output columns `blfc`, `timestamp`, `eventID_fadc` and `e_fc`.
+
+### Pulser Chain
+
+[`dsp_puls`](@ref) works on a waveform that has the shape of a detector pulse:
+
+1. The baseline statistics are determined in `bl_window` with `signalstats` and the mean is subtracted (`blmean`, `blsigma`, `blslope`, `bloffset`).
+2. `e_max` is the maximum of the baseline-subtracted waveform.
+3. `t50` is the first time at which the waveform reaches half of `e_max` ([`get_threshold`](@ref)).
+4. `e_10410` is the maximum of the waveform filtered with `TrapezoidalChargeFilter(10u"µs", 4u"µs")`. The waveform is not pole-zero corrected, so the trapezoid output depends on the decay time of the pulse.
+
+[`dsp_puls_compressed`](@ref) runs the same steps on `waveform_presummed`. The presummed waveform is not rescaled, so the amplitudes are in the units of the presummed samples.
+
+### Auxiliary Chain
+
+[`dsp_aux`](@ref) does not read the configuration. It determines the maximum sample and its time with [`extremestats`](@ref). `e_max` is the maximum minus the baseline reported by the FADC, and `t_max` is the time of the maximum sample. For `dsp_aux_compressed` the FADC baseline is multiplied by `presum_rate` before it is subtracted, because the samples of the presummed waveform are sums of `presum_rate` samples. `t_max` keeps the unit of the time axis of the waveform; the pulser chain returns `t50` in µs.
+
+### A Synthetic Example
+
+The example runs both chains on one synthetic waveform each. The pulser waveform is the charge pulse of the example above. The auxiliary waveform is a spike of 0.3 µs width on a constant baseline. The table of the auxiliary channel has the FADC baseline 100.
+
+```@setup dsp_chains
+using CairoMakie
+CairoMakie.activate!(type = "svg")
+```
+
+```@example dsp_chains
+puls_raw = Table(
+    waveform = ArrayOfRDWaveforms([synthetic_waveform(5000.0)]), baseline = [1000.0f0], timestamp = [UInt64(0)],
+    eventnumber = [UInt32(1)], daqenergy = [UInt16(0)],
+)
+out_puls = dsp_puls(puls_raw, config)
+
+t_aux = range(0.0u"ns", step = 16.0u"ns", length = 1024)
+spike(t) = 800.0 * exp(-0.5 * ((ustrip(u"µs", t) - 6.0) / 0.3)^2)
+wvf_aux = RDWaveform(t_aux, 100.0 .+ spike.(t_aux) .+ 2.0 .* randn(rng, length(t_aux)))
+aux_raw = Table(
+    waveform = ArrayOfRDWaveforms([wvf_aux]), baseline = [100.0f0], timestamp = [UInt64(0)],
+    eventnumber = [UInt32(1)], daqenergy = [UInt16(0)],
+)
+out_aux = dsp_aux(aux_raw, config)
+
+(puls = (e_max = only(out_puls.e_max), t50 = only(out_puls.t50), e_10410 = only(out_puls.e_10410)),
+ aux = (e_max = only(out_aux.e_max), t_max = only(out_aux.t_max)))
+```
+
+The figure marks `e_max` and `t50` of the pulser waveform and `e_max` and `t_max` of the auxiliary waveform.
+
+```@example dsp_chains
+using CairoMakie
+
+wvf_puls = puls_raw.waveform[1]
+fig = Figure(size = (700, 600))
+ax1 = Axis(fig[1, 1], ylabel = "Signal (ADC counts)", title = "Pulser: dsp_puls")
+lines!(ax1, ustrip.(u"µs", wvf_puls.time), wvf_puls.signal)
+hlines!(ax1, only(out_puls.blmean) + only(out_puls.e_max), color = :red, linestyle = :dash, label = "blmean + e_max")
+vlines!(ax1, ustrip(u"µs", only(out_puls.t50)), color = :green, linestyle = :dash, label = "t50")
+xlims!(ax1, 45, 60)
+axislegend(ax1, position = :rb)
+ax2 = Axis(fig[2, 1], xlabel = "Time (µs)", ylabel = "Signal (ADC counts)", title = "Auxiliary: dsp_aux")
+lines!(ax2, ustrip.(u"µs", wvf_aux.time), wvf_aux.signal)
+hlines!(ax2, only(aux_raw.baseline) + only(out_aux.e_max), color = :red, linestyle = :dash, label = "baseline + e_max")
+vlines!(ax2, ustrip(u"µs", only(out_aux.t_max)), color = :green, linestyle = :dash, label = "t_max")
+axislegend(ax2, position = :rt)
+fig
+```

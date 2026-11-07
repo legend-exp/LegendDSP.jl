@@ -242,3 +242,5 @@ maximum(wvf_trap.signal)
 ```
 
 The flat top of the trapezoid reaches the height of the step, here 100, when it is longer than the rise of the pulse.
+
+The trapezoidal, CUSP and ZAC filters round their times to whole samples; the flat-top time that a filter applies is returned by [`realized_flattop`](@ref) (see [Filter Optimization](@ref)).

@@ -37,10 +37,10 @@ update_theme!(fontsize = 14)
 # A charge-sensitive preamplifier turns the charge collected in the detector into a step that
 # decays exponentially with a time constant `τ`. The simulated waveforms have the following properties:
 #
-# - The sampling period is 16 ns and a trace has 5000 samples (80 µs).
+# - The sampling period is 16 ns and a trace has 6000 samples (96 µs).
 # - The charge rises with the shape of the integral of a Gaussian current pulse, with a width between 80 and 140 ns
 #   for each event. The 10%-90% rise time is therefore between 200 and 360 ns.
-#   The pulse starts at (25 ± 2) µs.
+#   The pulse starts at (50 ± 2) µs, so that the pre-trigger baseline is about 50 µs long.
 # - The decay time is `τ = 40 µs`.
 # - Every waveform has an individual baseline offset of 2000 ± 30 ADC counts. White noise (standard deviation of 10 counts)
 #   is added to every sample. A random walk of the preamplifier output, which models the parallel noise of the
@@ -52,7 +52,7 @@ update_theme!(fontsize = 14)
 # and a flat continuum between 150 and 2614 keV.
 # The intrinsic standard deviation of a line is `sqrt(0.2² + 10⁻⁴ E)` in keV for the energy `E` in keV.
 
-function simulate_charge_waveforms(rng, energies; dt = 16.0u"ns", n = 5000, t_start = 25.0u"µs", τ = 40.0u"µs",
+function simulate_charge_waveforms(rng, energies; dt = 16.0u"ns", n = 6000, t_start = 50.0u"µs", τ = 40.0u"µs",
         gain = 2f0, white_noise = 10f0, walk_noise = 0.07f0)
     time = range(0.0u"µs", step = dt, length = n)
     t = Float32.(ustrip.(u"ns", time))
@@ -120,15 +120,15 @@ fig
 
 # The baseline of each waveform is the mean of the samples before the signal starts.
 # `signalstats` from RadiationDetectorDSP returns the mean, standard deviation,
-# slope and offset of a linear fit in a time interval. Here the interval from 0 to 20 µs is used.
+# slope and offset of a linear fit in a time interval. Here the interval from 0 to 40 µs is used.
 # `shift_waveform` subtracts the baseline.
 
-bl_window = 0u"µs" .. 20u"µs"
+bl_window = 0u"µs" .. 40u"µs"
 bl = signalstats.(wvfs, leftendpoint(bl_window), rightendpoint(bl_window))
 wvfs_bl = shift_waveform.(wvfs, -bl.mean);
 
 # The estimate is compared with the baseline offsets of the simulation. The typical deviation is about one ADC count,
-# which is caused by the white noise and mainly by the random walk within the 20 µs window. The example stops
+# which is caused by the white noise and mainly by the random walk within the 40 µs window. The example stops
 # if the deviation is much larger:
 
 Δbl = bl.mean .- sim.baseline
@@ -139,10 +139,10 @@ median(abs.(Δbl))
 
 # The tail of the waveform decays as `exp(-t/τ)`. `tailstats` fits a straight line to the logarithm of the signal in a
 # time interval and returns the decay time `τ`. It needs a baseline-subtracted waveform with positive samples in the
-# interval. The tail window is placed after the pulse, from 45 to 78 µs. The logarithm of low-amplitude
+# interval. The tail window is placed after the pulse, from 65 to 94 µs. The logarithm of low-amplitude
 # waveforms is dominated by noise, so only events above 1500 keV are used (selected here with the maximum of the waveform).
 
-tail_window = 45u"µs" .. 78u"µs"
+tail_window = 65u"µs" .. 94u"µs"
 tail = tailstats.(wvfs_bl, leftendpoint(tail_window), rightendpoint(tail_window))
 high = findall(maximum.(wvfs_bl.signal) .> 1500 * gain)
 τ_events = uconvert.(u"µs", tail.τ[high])
@@ -211,7 +211,7 @@ t50 = get_threshold(wvfs_pz, 0.5 .* e_101010; mintot = 600u"ns");
 
 i = findfirst(==(5), line_index)
 fig = Figure(size = (800, 350))
-ax = Axis(fig[1, 1], xlabel = "Time (µs)", ylabel = "Signal (ADC counts)", limits = (22, 29, nothing, nothing))
+ax = Axis(fig[1, 1], xlabel = "Time (µs)", ylabel = "Signal (ADC counts)", limits = (47, 54, nothing, nothing))
 LegendMakie.waveformplot!(ax, wvfs_pz[i], label = "pole-zero corrected")
 vlines!(ax, ustrip(u"µs", t0[i]), color = :green, label = "t0")
 vlines!(ax, ustrip(u"µs", t50[i]), color = :red, label = "t50")
@@ -233,6 +233,13 @@ fig
 #   for white series noise. The arguments are the shaping time, the length of the flat top, a decay time of the
 #   filter, the total length of the filter and a scale factor. The decay time is set to a very large value, because
 #   the pole-zero correction has already been applied. The scale factor is the length of the filter in samples.
+#
+# The filtered value at a time `t` is a weighted sum of the samples within one filter length before `t`.
+# With the pick-off in the middle of the flat top, about half of that interval lies before the start of the pulse.
+# The filter should therefore be shorter than the pre-trigger baseline, which is at least 48 µs long here. Otherwise
+# the energy depends on the first samples of the trace and, in real data, on the tail of a preceding pulse.
+# For a trapezoid the total length is `2 * rise + flat`, for the CUSP and ZAC filters it is the filter length.
+# All filters of this tutorial are shorter than 48 µs.
 #
 # The energy is the value of the filtered waveform at a fixed time after t50. The pick-off is
 # done with a `SignalEstimator`, which fits a polynomial of degree 3 in a window of 800 ns around the pick-off time.
@@ -279,7 +286,7 @@ fwhm(e) = 2 * sqrt(2 * log(2)) * mad(e, normalize = true)
 fep = findall(==(5), line_index)
 
 flat = 2.0u"µs"
-rise_times = [1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 14.0, 20.0] .* u"µs"
+rise_times = [1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 10.0, 14.0, 20.0] .* u"µs" # 2 * rise + flat <= 42 µs
 fwhm_trap = map(rise_times) do rise
     wvfs_flt = TrapezoidalChargeFilter(rise, flat).(wvfs_pz[fep])
     fwhm(pickoff.(wvfs_flt, t50[fep] .+ (rise + flat / 2)) ./ gain)
@@ -343,11 +350,11 @@ config = DSPConfig(PropDict(Dict(
     :enc_pickoff_trap => 12.0u"µs", :enc_pickoff_zac => 15.0u"µs", :enc_pickoff_cusp => 15.0u"µs",
     :flt_length_cusp => filter_length, :flt_length_zac => filter_length,
     :t0_threshold => 80.0, :inTraceCut_std_threshold => 5.0, :sg_flt_degree => 3,
-    :bl_window => Dict(:min => 0.0u"µs", :max => 20.0u"µs"),
-    :tail_window => Dict(:min => 45.0u"µs", :max => 78.0u"µs"),
-    :current_window => Dict(:min => 15.0u"µs", :max => 45.0u"µs"),
-    :auxpz1_window => Dict(:min => 45.0u"µs", :max => 60.0u"µs"),
-    :auxpz2_window => Dict(:min => 60.0u"µs", :max => 78.0u"µs"),
+    :bl_window => Dict(:min => 0.0u"µs", :max => 40.0u"µs"),
+    :tail_window => Dict(:min => 65.0u"µs", :max => 94.0u"µs"),
+    :current_window => Dict(:min => 40.0u"µs", :max => 70.0u"µs"),
+    :auxpz1_window => Dict(:min => 65.0u"µs", :max => 80.0u"µs"),
+    :auxpz2_window => Dict(:min => 80.0u"µs", :max => 94.0u"µs"),
     :qdrift_int_length => [2.5u"µs", 5.0u"µs"],
     :lq_windows => [[2.5u"µs", 0.0u"µs", 2.5u"µs"]],
     :e_grid_trap => Dict(:rt => grid(1.0u"µs", 10.0u"µs", 1.0u"µs"), :ft => grid(1.0u"µs", 4.0u"µs", 1.0u"µs")),
@@ -364,6 +371,8 @@ config = DSPConfig(PropDict(Dict(
         :t0_mintot => 600.0u"ns", :tx_mintot => 600.0u"ns", :intrace_mintot => 2.0u"µs"),
 )));
 
+# The fixed trapezoids of `dsp_icpc` (10 µs rise and 10 µs flat top for `e_101010`, 10 µs and 4 µs for `e_10410`) have
+# total lengths of 30 µs and 24 µs, which fit in the baseline as well.
 # The trapezoid is used with 4 µs rise and 2 µs flat-top time, the CUSP and ZAC filters with the defaults of
 # the configuration. An empty `PropDict` as filter parameters selects the defaults in `flt_defaults`.
 # The decay time that was estimated above is passed on.

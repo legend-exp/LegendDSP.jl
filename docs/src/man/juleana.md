@@ -65,11 +65,15 @@ dsp_data = dsp_icpc_compressed(raw_data, config, pars_tau[det].τ, pars_filter[d
 | `dsp_{trap,cusp,zac}_rt_optimization` | filter optimization | `(wvfs_pre, config, τ; ft = ft_fixed)` | Noise grid over the rise times |
 | `dsp_{trap,cusp,zac}_ft_optimization` | filter optimization | `(wvfs_pre, config, τ, rt)` | Energy grid over the flat-top times at the optimal rise time |
 | `dsp_{sg,mwa}_optimization_compressed` | A/E optimization | `(wvfs_wdw, wvfs_pre, config, τ, pars_filter; f_evaluate_qc, presum_rate)` on waveforms of two calibration lines | A/E grid over the window lengths |
-| `dsp_puls_compressed`, `dsp_aux_compressed` | DSP for physics data and for auxiliary channels | `(raw, config)` | Pulser, baseline and veto channels |
+| `dsp_puls_compressed`, `dsp_aux_compressed` | DSP for physics data (`process_dsp_phy`) and the auxiliary-channel DSP (`process_dsp_aux_phy`, `jlaux` tier) | `(raw, config)` | Pulser, baseline and veto channels; see [Pulser and Auxiliary Chains](@ref) |
 | [`dsp_pmts`](@ref) | DSP for physics data | `(raw, pmt_config)` | PMT channels |
 | `dsp_sipm_compressed` | DSP for physics data | `(raw, sipm_config, pars_sipm[det])` | SiPM channels |
-| `dsp_sg_sipm_optimization_compressed` | SiPM optimization | `(10000, wvfs, sipm_config, optimization_config)` | Trigger maxima and thresholds over the window lengths |
-| `dsp_sg_sipm_thresholds_compressed` | SiPM optimization | `(wvfs, wl, sipm_config)` | Baseline and threshold distributions at the optimal window length |
+| `dsp_sg_sipm_optimization_compressed` | SiPM optimization | `(10000, decode_data(wvfs), sipm_config, optimization_config)`; the first argument is `n_max_wvfs` | Trigger maxima and thresholds over the window lengths. The method with `n_max_wvfs` throws a `MethodError`, see [SiPM Parameter Scans](@ref) |
+| `dsp_sg_sipm_thresholds_compressed` | SiPM optimization | `(decode_data(wvfs[1:n_wvfs]), wl, sipm_config)` | Baseline and threshold distributions at the optimal window length |
+
+The partition-level processors (`p_process_decay_time_cal`, `p_process_filter_optimization_cal`, `p_process_aoe_optimization_cal`, `p_process_sipm_optimization_phy`) call the same functions with the waveforms of all runs of a partition.
+
+The dataflow calls the rise-time and flat-top scans with waveforms and `τ`. It does not use [`FltOptPrep`](@ref), [`dsp_flt_optimization_prepare`](@ref), [`dsp_energy_rtft`](@ref) or [`realized_flattop`](@ref); these are described in [Filter Optimization](@ref). The SiPM configuration that `dsp_sipm_compressed` receives must contain the section `filters.xt_tag` ([SiPM and PMT Processing](@ref)).
 
 The functions that are not in the table (`dsp_icpc`, `dsp_puls`, `dsp_aux`, `dsp_sipm`, `dsp_qc_flt_optimization`, `dsp_sg_optimization`, `dsp_mwa_optimization`, the primitives of [Waveform Parameters](@ref), the filters of [Filters](@ref) and the classifiers of [Machine-Learning Quality Cuts](@ref)) are not called by name from the processors. The processors work on the compressed raw data format, so they use the `_compressed` variants.
 
