@@ -50,10 +50,10 @@ end
     t = range(0u"μs", 20u"μs", 2*n)
     signal = vcat(zeros(n), 10*ones(n))
     wf = RDWaveform(t, signal)
-    
+
     # define filter parameters and filter
     flt = ModifiedSincFilter(d=4, m=1u"μs")
-    
+
     # apply filter to signal
     @test_nowarn flt(wf)
 
@@ -67,21 +67,30 @@ end
         0.0,
         0.0,
         0.0,
-        -0.548368134165832,
-        1.1885440629944422,
-        1.1885440629944422,
-        8.701152183830784,
-        8.701152183830784,
-        10.438064380991058,
-        9.889696246825226,
-        9.889696246825226,
-        9.889696246825226,
-        9.889696246825226,
-        9.889696246825226,
-        9.889696246825226,
-        9.889696246825226
+        0.055151876587386656,
+        -0.49321625757844534,
+        1.243695939581829,
+        8.75630406041817,
+        10.493216257578444,
+        9.944848123412612,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.0,
+        10.000000000000002
     ]
     @test isapprox(res, flt(x); rtol=1e-6)
+
+    # symmetric kernel: the step response is antisymmetric about the step
+    y = flt(x)
+    @test isapprox(y .+ reverse(y), fill(10.0, length(y)); rtol=1e-6)
+
+    # normalized kernel: a constant passes unchanged, for every degree
+    for (d, m) in ((2, 4), (4, 4), (6, 5), (8, 6), (10, 7))
+        @test isapprox(ModifiedSincFilter(d, m)(fill(3.0, 30)), fill(3.0, 30); rtol=1e-6)
+    end
 end
 
 @testset "Test WhittakerHendersonFilter" begin
