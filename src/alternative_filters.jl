@@ -331,10 +331,10 @@ function RadiationDetectorDSP.rdfilt!(output::AbstractVector,
     @inbounds for i in eachindex(input)
         center = fi.m + i
         sum = fma(kernel[1], _y[center], sum)
-        @simd for j in Base.OneTo(length(kernel)-2)
+        @simd for j in Base.OneTo(length(kernel)-1)
             k_j = kernel[j+1]
-            sum = fma(k_j, _y[center + j+1], sum)
-            sum = fma(k_j, _y[center - (j+1)], sum)
+            sum = fma(k_j, _y[center + j], sum)
+            sum = fma(k_j, _y[center - (j)], sum)
         end
         output[i] = sum
         sum = zero(T)
