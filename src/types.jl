@@ -26,6 +26,8 @@ All time-valued fields are `Unitful` quantities. Create an instance from DSP met
 - `a_mwa_windows`: fixed window lengths of the moving-window-average current filter; each gives a column `a_mwa_<ns>`
 - `a_mwa_passes`: number of alternating passes of the moving-window-average current filter, see [`MovingWindowMultiFilter`](@ref)
 - `a_sg_windows`: fixed window lengths of the Savitzky-Golay current filter; each gives a column `a_sg_<ns>`
+- `a_wsg_windows`, `a_wsg_weights`: fixed window lengths and weight types (see [`WeightedSavitzkyGolayFilter`](@ref)) of the weighted Savitzky-Golay current filter; each combination gives a column `a_wsg_<weight>_<ns>`, see [`LegendDSP.wsg_column_name`](@ref)
+- `a_wsg_degree`: polynomial degree of the weighted Savitzky-Golay current filter
 - `default_flt_param`: `PropDict` with the default filter parameters: `rt` and `ft` for `trap`, `cusp` and `zac`, and the window length for `sg` and `mwa`
 - `kwargs_pars`: `PropDict` with further parameters: `fc_bit_depth`, `t0_flt_pars`, `t0_mintot`, `tx_mintot`, `intrace_mintot`, `int_interpolation_order`, `int_interpolation_length`, `sig_interpolation_order` and `sig_interpolation_length`
 - `auxpz1_window`, `auxpz2_window`: time windows of the auxiliary pole-zero statistics `auxpz1_*` and `auxpz2_*` of [`dsp_icpc_compressed`](@ref)
@@ -100,6 +102,11 @@ struct DSPConfig{T <: Real}
     # fixed SG window lengths stored as `a_sg_<ns>` columns
     a_sg_windows::Vector{<:Quantity{<:T}}
 
+    # fixed weighted SG window lengths, weight types and polynomial degree of the `a_wsg_<weight>_<ns>` columns
+    a_wsg_windows::Vector{<:Quantity{<:T}}
+    a_wsg_weights::Vector{Int}
+    a_wsg_degree::Int
+
     # default filter parameter
     default_flt_param::PropDict
 
@@ -124,6 +131,7 @@ Create a `DSPConfig{Float64}` from DSP metadata.
 - `e_grid_trap`, `e_grid_zac` and `e_grid_cusp` each contain `rt` and `ft` entries with `start`, `step` and `stop`; `a_grid_wl_sg` and `a_grid_wl_mwa` have the same three entries. `a_grid_wl_mwa` is optional and defaults to `a_grid_wl_sg`;
 - `qdrift_int_length` holds a start and a stop time; the resulting range has a step of 0.1 in the unit of the start time;
 - `default_flt_param` is read from the entry `flt_defaults`;
+- `a_wsg_windows`, `a_wsg_weights` and `a_wsg_degree` are optional: without them no `a_wsg_<weight>_<ns>` columns are written, and `a_wsg_degree` defaults to `sg_flt_degree - 1` (the current is smoothed after the derivative, so this matches the degree of the `a_sg` filter). A weight type outside 0–4 throws an `ArgumentError`;
 - every element of `lq_windows` must have exactly three entries, otherwise an `ArgumentError` is thrown.
 """
 function DSPConfig(pd::PropDict)

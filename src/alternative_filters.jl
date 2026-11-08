@@ -115,6 +115,26 @@ end
 
 Adapt.adapt_structure(to, flt::WeightedSavitzkyGolayFilter) = flt
 
+# names of the weight types in the `a_wsg_<weight>_<ns>` columns
+const WSG_WEIGHT_NAMES = Dict(0 => "flat", 1 => "gauss", 2 => "hann", 3 => "hann2", 4 => "hann3")
+
+"""
+    LegendDSP.wsg_column_name(weight_type::Int, wl::Unitful.Time)
+
+Name of the current column of the weighted Savitzky-Golay filter with the weight type
+`weight_type` and the window length `wl`: `a_wsg_<weight>_<ns>`, with `<weight>` one of
+`flat` (0), `gauss` (1), `hann` (2), `hann2` (3) and `hann3` (4), and the window length
+rounded to ns, for example `a_wsg_hann_176`.
+"""
+wsg_column_name(weight_type::Int, wl) = Symbol(:a_wsg_, WSG_WEIGHT_NAMES[weight_type], :_, round(Int, ustrip(u"ns", wl)))
+
+# Current maxima in `current_window` of the derivative `wvfs_deriv` smoothed with the weighted
+# Savitzky-Golay filter, one column per window length and weight type of `config`.
+function _a_wsg_fixed(wvfs_deriv, config, current_window)
+    return NamedTuple(wsg_column_name(w, wl) => get_a(WeightedSavitzkyGolayFilter(wl, config.a_wsg_degree, w).(wvfs_deriv), current_window).max
+                      for wl in config.a_wsg_windows for w in config.a_wsg_weights)
+end
+
 @inbounds function _unsafe_convolve!(y::AbstractVector, P::AbstractMatrix, 
     kernel::AbstractVector, weights::AbstractVector, x::AbstractVector,
     m::Int, d::Int, weightType::Int)
@@ -124,15 +144,20 @@ Adapt.adapt_structure(to, flt::WeightedSavitzkyGolayFilter) = flt
     pRight::Int = 0
     scale::T = zero(T)
     L = length(x)
-    # left near-boundary and interior points
+    # left near-boundary and interior points; the interior kernel (pLeft == m) is the same
+    # for every point, so it is computed once
+    interior_kernel = false
     for i in Base.OneTo(L - m)
         pLeft = min(m, i-1)
         scale = weightFunctionScale((m - pLeft)/m, weightType)
         pRight = floor(Int, (m+1)/scale)
         pRight = ifelse((pRight + pLeft) > 2*m, 2*m - pLeft, pRight)
         len_k = pRight + pLeft + 1
-        _unsafe_make_left_kernel!(kernel, P, weights, pLeft, len_k, 
-            scale, m, d, weightType)
+        if !(interior_kernel && pLeft == m)
+            _unsafe_make_left_kernel!(kernel, P, weights, pLeft, len_k,
+                scale, m, d, weightType)
+            interior_kernel = pLeft == m
+        end
         for j in Base.OneTo(len_k)
             idx = max(i-m-1, 0) + j
             sum = fma(kernel[j], x[idx], sum)
@@ -140,10 +165,11 @@ Adapt.adapt_structure(to, flt::WeightedSavitzkyGolayFilter) = flt
         y[i] = sum
         sum = zero(T)
     end
-    # near boundary points at the right
+    # near boundary points at the right: the kernel is applied mirrored, `pLeft` is the
+    # number of samples between `y[L-m+i]` and the end of the signal
     sum = zero(T)
     for i in Base.OneTo(m)
-        pLeft = m-i+1
+        pLeft = m-i
         scale = weightFunctionScale((m - pLeft)/m, weightType)
         pRight = floor(Int, (m+1)/scale)
         pRight = ifelse((pRight + pLeft) > 2*m, 2*m - pLeft, pRight)
@@ -165,12 +191,13 @@ end
     polynomials::AbstractMatrix, weights::AbstractVector, pLeft::Int, 
     k_len::Int, scale::T, m::Int, d::Int, weightType::Int) where T
 
+    # weights at the distance i-1 from the center pLeft+1, on both sides of it
     for i in Base.OneTo(k_len - pLeft)
         w_i = weight_function(weightType, (i-1)*scale/(m+1))
         weights[pLeft+i] = w_i
-        ((i != 1) && (i < pLeft)) && (weights[pLeft-i] = w_i)
+        (2 <= i <= pLeft + 1) && (weights[pLeft+2-i] = w_i)
     end
-    inv_sumw = 1.0/sqrt(sum(weights))
+    inv_sumw = 1.0/sqrt(sum(view(weights, 1:k_len)))
     @simd for i in axes(polynomials, 2)
         polynomials[1, i] = inv_sumw
         kernel[i] = 0.

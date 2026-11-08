@@ -70,6 +70,7 @@ The HPGe, pulser and auxiliary chains, the decay-time extraction and the filter 
 | `e_grid_rt_trap`, `e_grid_ft_trap`, `e_grid_rt_zac`, `e_grid_ft_zac`, `e_grid_rt_cusp`, `e_grid_ft_cusp` | Rise-time and flat-top-time grids of the energy filter scans | `dsp_{trap,zac,cusp}_{rt,ft}_optimization` |
 | `a_grid_wl_sg`, `a_grid_wl_mwa` | Window-length grids of the SG and MWA current filters | `dsp_sg_optimization(_compressed)`, `dsp_mwa_optimization(_compressed)` |
 | `a_mwa_windows`, `a_sg_windows` | Fixed window lengths for which extra current columns `a_mwa_<ns>` and `a_sg_<ns>` are written | `dsp_icpc(_compressed)` |
+| `a_wsg_windows`, `a_wsg_weights`, `a_wsg_degree` | Optional: fixed window lengths, weight types (0 flat, 1 Gaussian, 2 Hann, 3 Hann², 4 Hann³) and polynomial degree (default `sg_flt_degree - 1`) of the weighted Savitzky-Golay current filter; one column `a_wsg_<weight>_<ns>` per window length and weight type | `dsp_icpc(_compressed)` |
 | `a_mwa_passes` | Number of alternating moving-average passes of the MWA current filter | `dsp_icpc(_compressed)`, `dsp_mwa_optimization(_compressed)` |
 | `default_flt_param` | Filter parameters used when a detector has no optimized value (see below) | `dsp_icpc(_compressed)`, `dsp_qc_flt_optimization(_compressed)` |
 | `kwargs_pars` | Further settings, see below | most functions |

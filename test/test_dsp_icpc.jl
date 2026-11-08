@@ -244,3 +244,29 @@ end
     @test MovingWindowMultiFilter(16u"ns")(wf).signal ≈ x
     @test_throws ArgumentError MovingWindowMultiFilter(64u"ns"; passes = 0)(wf)
 end
+
+@testset "weighted Savitzky-Golay current columns" begin
+    data   = make_fake_data(3)
+    τ      = 500u"µs"
+    pd = make_fake_config_pd()
+    # without the optional keys there are no a_wsg columns
+    result = dsp_icpc_compressed(data, DSPConfig(pd), τ, PropDict())
+    @test !any(startswith(string(c), "a_wsg_") for c in columnnames(result))
+    @test DSPConfig(pd).a_wsg_degree == pd[:sg_flt_degree] - 1
+    pd[:a_wsg_windows] = [112.0u"ns", 176.0u"ns"]
+    pd[:a_wsg_weights] = [0, 2, 4]
+    pd[:a_wsg_degree]  = 2
+    result = dsp_icpc_compressed(data, DSPConfig(pd), τ, PropDict())
+    cols = columnnames(result)
+    @test all(c in cols for c in (:a_wsg_flat_112, :a_wsg_hann_112, :a_wsg_hann3_112, :a_wsg_flat_176, :a_wsg_hann_176, :a_wsg_hann3_176))
+    @test LegendDSP.wsg_column_name(3, 0.304u"µs") == :a_wsg_hann2_304
+    # the columns equal the explicit filter chain on the baseline-subtracted, PZ-corrected waveform
+    wvfs = InvCRFilter(τ).(shift_waveform.(data.waveform_windowed, -result.blmean)); wvfs_deriv = DerivativeFilter(1).(wvfs)
+    ref(ws) = get_wvf_maximum.(ws, 43.0u"µs", 62.0u"µs")
+    @test ustrip.(result.a_wsg_hann_176) ≈ ustrip.(ref(WeightedSavitzkyGolayFilter(176u"ns", 2, 2).(wvfs_deriv)).max)
+    @test ustrip.(result.a_wsg_flat_112) ≈ ustrip.(ref(WeightedSavitzkyGolayFilter(112u"ns", 2, 0).(wvfs_deriv)).max)
+    @test all(isfinite, ustrip.(result.a_wsg_hann3_176))
+    # unknown weight types are refused
+    pd[:a_wsg_weights] = [5]
+    @test_throws ArgumentError DSPConfig(pd)
+end

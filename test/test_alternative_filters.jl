@@ -123,3 +123,20 @@ end
     ]
     @test isapprox(res, flt(x); rtol=1e-6)
 end
+@testset "WeightedSavitzkyGolayFilter against weighted least squares" begin
+    L = 200
+    t = (0:(L - 1)) .* 16.0u"ns"
+    x = sin.((1:L) ./ 7) .+ 0.3 .* cos.((1:L) ./ 2.3)
+    p = [0.3 + 0.01i - 2e-4i^2 + 1e-6i^3 for i in 1:L]
+    for (m, d) in ((3, 2), (6, 3), (10, 4)), wt in 0:4
+        flt = WeightedSavitzkyGolayFilter((2m + 1) * 16.0u"ns", d, wt)
+        # interior: weighted least-squares fit of degree d over -m:m, evaluated at the center
+        w = [LegendDSP.weight_function(wt, abs(j) / (m + 1)) for j in -m:m]
+        A = [float(j)^k for j in -m:m, k in 0:d]
+        kernel = ((A' * (w .* A)) \ (A' .* w'))[1, :]
+        y = flt(RDWaveform(t, x)).signal
+        @test y[(m + 1):(L - m)] ≈ [sum(kernel .* x[(i - m):(i + m)]) for i in (m + 1):(L - m)] atol = 1e-10
+        # a polynomial of degree <= d is reproduced everywhere, also at both ends
+        d >= 3 && @test flt(RDWaveform(t, p)).signal ≈ p atol = 1e-10
+    end
+end

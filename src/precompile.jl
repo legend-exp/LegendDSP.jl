@@ -40,6 +40,9 @@
         :a_mwa_windows => [48.0u"ns", 288.0u"ns"],
         :a_mwa_passes  => 3,
         :a_sg_windows  => [60.0u"ns", 100.0u"ns"],
+        :a_wsg_windows => [112.0u"ns"],
+        :a_wsg_weights => [2],
+        :a_wsg_degree  => 2,
         :flt_defaults  => PropDict(:sg => 100.0u"ns", :mwa => 96.0u"ns",
                                    :trap => flt_default, :zac => flt_default, :cusp => flt_default, :dplms => flt_default),
         :kwargs_pars => PropDict(

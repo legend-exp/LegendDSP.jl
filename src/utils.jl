@@ -64,7 +64,14 @@ function _create_dsp_config(dsp_metadata::PropDicts.PropDict)
         dsp_metadata.a_mwa_passes,
         # fixed SG window lengths stored as `a_sg_<ns>` columns
         dsp_metadata.a_sg_windows,
-        
+        # fixed weighted SG window lengths, weight types and degree (optional: no columns without them)
+        get(dsp_metadata, :a_wsg_windows, similar(dsp_metadata.a_sg_windows, 0)),
+        let w = Int.(collect(get(dsp_metadata, :a_wsg_weights, Int[])))
+            all(in(WEIGHTTYPES), w) || throw(ArgumentError("a_wsg_weights must be weight types in $(sort(collect(WEIGHTTYPES))), got $w"))
+            w
+        end,
+        Int(get(dsp_metadata, :a_wsg_degree, max(dsp_metadata.sg_flt_degree - 1, 0))),
+
         # flt defaults
         dsp_metadata.flt_defaults,
         

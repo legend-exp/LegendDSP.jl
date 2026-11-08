@@ -47,6 +47,7 @@ Current:
 - `a_sg`, `t_a_sg`: maximum in `config.current_window` of the Savitzky-Golay derivative with window length `sg.wl` and polynomial degree `config.sg_flt_degree`, and its interpolated time
 - `a_mwa`, `t_a_mwa`: maximum in `config.current_window` of the simple derivative after `MovingWindowMultiFilter(mwa.wl; passes = config.a_mwa_passes)`, and its interpolated time
 - `a_sg_<ns>`, `a_mwa_<ns>`: the same maxima for each fixed window length in `config.a_sg_windows` and `config.a_mwa_windows`, with the window length in ns in the column name
+- `a_wsg_<weight>_<ns>`: maximum in `config.current_window` of the simple derivative after `WeightedSavitzkyGolayFilter(wl, config.a_wsg_degree, weight)`, for each window length `wl` in `config.a_wsg_windows` and weight type `weight` in `config.a_wsg_weights`, see [`LegendDSP.wsg_column_name`](@ref)
 - `t_amax`: interpolated time of the maximum of the simple derivative over the whole waveform
 
 Charge drift:
@@ -202,6 +203,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
 
     a_sg_fixed  = NamedTuple(Symbol(:a_sg_,  round(Int, ustrip(u"ns", wl))) => get_a(SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs), current_window).max for wl in config.a_sg_windows)
     a_mwa_fixed = NamedTuple(Symbol(:a_mwa_, round(Int, ustrip(u"ns", wl))) => get_a(MovingWindowMultiFilter(wl; passes = config.a_mwa_passes).(wvfs_deriv), current_window).max for wl in config.a_mwa_windows)
+    a_wsg_fixed = _a_wsg_fixed(wvfs_deriv, config, current_window)
 
     # get in-trace pile-up
     inTrace_pileUp = get_triggers(wvfs_sgflt_deriv, inTraceCut_std_threshold, bl_window; mintot=config.kwargs_pars.intrace_mintot)
@@ -240,7 +242,7 @@ function dsp_icpc(data::Q, config::DSPConfig, τ::Quantity{T}, pars_filter::Prop
     e_trap_max = e_trap_extremestats.max, e_cusp_max = e_cusp_extremestats.max, e_zac_max = e_zac_extremestats.max,
     t_trap_max = e_trap_extremestats.tmax, t_cusp_max = e_cusp_extremestats.tmax, t_zac_max = e_zac_extremestats.tmax,
     qdrift = qdrift, lq80..., lq90..., lqamax...,
-    a_sg = a_sg, a_raw = a_raw, a_mwa = a_mwa, a_sg_fixed..., a_mwa_fixed...,
+    a_sg = a_sg, a_raw = a_raw, a_mwa = a_mwa, a_sg_fixed..., a_mwa_fixed..., a_wsg_fixed...,
     blfc = blfc, timestamp = ts, eventID_fadc = evID, e_fc = efc,
     inTrace_intersect = inTrace_pileUp.intersect, inTrace_n = inTrace_pileUp.n,
     n_sat_low = sat_stats.low, n_sat_high = sat_stats.high, n_sat_low_cons = sat_stats.max_cons_low, n_sat_high_cons = sat_stats.max_cons_high
@@ -305,7 +307,7 @@ Energies, from the presummed waveform:
 - `t0_inv`: t0 of the windowed waveform multiplied by -1, in µs, determined with the default `flt_pars` of [`get_t0`](@ref)
 
 Current, from the windowed waveform:
-- `a_raw`, `a_sg`, `t_a_sg`, `a_mwa`, `t_a_mwa`, `a_sg_<ns>`, `a_mwa_<ns>`: as for [`dsp_icpc`](@ref)
+- `a_raw`, `a_sg`, `t_a_sg`, `a_mwa`, `t_a_mwa`, `a_sg_<ns>`, `a_mwa_<ns>`, `a_wsg_<weight>_<ns>`: as for [`dsp_icpc`](@ref)
 
 Charge drift, from the windowed waveform:
 - `qdrift`: Q-drift parameter from [`get_qdrift`](@ref), using `t0` and `config.qdrift_int_length`
@@ -469,6 +471,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
 
     a_sg_fixed  = NamedTuple(Symbol(:a_sg_,  round(Int, ustrip(u"ns", wl))) => get_a(SavitzkyGolayFilter(wl, sg_flt_degree, 1).(wvfs_wdw), current_window).max for wl in config.a_sg_windows)
     a_mwa_fixed = NamedTuple(Symbol(:a_mwa_, round(Int, ustrip(u"ns", wl))) => get_a(MovingWindowMultiFilter(wl; passes = config.a_mwa_passes).(wvfs_deriv), current_window).max for wl in config.a_mwa_windows)
+    a_wsg_fixed = _a_wsg_fixed(wvfs_deriv, config, current_window)
 
     # Trigger filter with trapezoidal filter
     trig_flt = TrapezoidalChargeFilter(2u"µs", 1u"µs")
@@ -527,7 +530,7 @@ function dsp_icpc_compressed(data::Q, config::DSPConfig, τ::Quantity{T}, pars_f
         # Qdrift & LQ
         qdrift = qdrift, lq80..., lq90..., lqamax...,
         # currents
-        a_sg = a_sg, a_raw = a_raw, a_mwa = a_mwa, a_sg_fixed..., a_mwa_fixed...,
+        a_sg = a_sg, a_raw = a_raw, a_mwa = a_mwa, a_sg_fixed..., a_mwa_fixed..., a_wsg_fixed...,
         # trigger
         trigger_position = triggers.intersect, trigger_multiplicity = triggers.n,
         # inverse parameters
