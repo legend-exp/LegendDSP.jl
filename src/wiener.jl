@@ -130,3 +130,52 @@ function wiener_synthesis(noise, template::AbstractVector{<:Real}, target::Abstr
     (coeffs = coeffs, response = response, noise_out = noise_out, spectrum = spectrum)
 end
 export wiener_synthesis
+
+"""
+    wiener_optimization(noise, template::AbstractVector{<:Real}, target::AbstractVector{<:Real}, n_pre::Integer; lambdas::AbstractVector{<:Real}, tail::AbstractUnitRange{<:Integer}, tail_max::Real, n_half::Integer)
+
+Kernel of [`wiener_synthesis`](@ref) with the largest noise weight `λ` of `lambdas` that still
+leaves the response on the target behind the pulse. A larger `λ` gives less noise after the
+kernel, but lets the response trail behind the target, into the place of a following pulse.
+
+For every `λ` the response is compared with the target at the lags `tail` after lag 0, in
+two ways: the largest deviation relative to the maximum of the target, which is what a
+following pulse sees after a short shaping, and the largest running sum of the deviation
+relative to the sum of the target, which is what it sees after a long one. `lambdas` are gone
+through in increasing order, and the last `λ` before the first one with a value above
+`tail_max` is taken.
+
+Throws if `lambdas` do not increase, if `tail` does not lie on the axis of `template`, or if the
+smallest `λ` already exceeds `tail_max`.
+
+# Arguments
+- `noise`, `template`, `target`, `n_pre`: as for [`wiener_synthesis`](@ref)
+
+# Keywords
+- `lambdas`: noise weights to try, increasing
+- `tail`: lags after lag 0, in samples, at which the response is compared with the target
+- `tail_max`: largest allowed deviation and running sum
+- `n_half`: number of kernel samples on either side of lag 0
+
+# Returns
+- named tuple with
+
+- `λ`, `coeffs`, `response`, `noise_out`, `spectrum`: the chosen noise weight and its kernel, as from [`wiener_synthesis`](@ref),
+- `scan`: named tuple of one vector per quantity with one value per `λ`: `λ`, `tail_deviation`, `tail_sum` and `noise_out`.
+"""
+function wiener_optimization(noise, template::AbstractVector{<:Real}, target::AbstractVector{<:Real}, n_pre::Integer;
+        lambdas::AbstractVector{<:Real}, tail::AbstractUnitRange{<:Integer}, tail_max::Real, n_half::Integer)
+    issorted(lambdas, lt = <=) || throw(ArgumentError("noise weights must increase, got $lambdas"))
+    idxs = n_pre + 1 .+ tail
+    first(tail) > 0 && checkbounds(Bool, template, idxs) || throw(ArgumentError("tail lags $tail do not lie after lag 0 on the $(length(template)) samples of the template with $n_pre before lag 0"))
+    kernels = [wiener_synthesis(noise, template, target, n_pre; λ, n_half) for λ in lambdas]
+    residuals = [view(k.response, idxs) .- view(target, idxs) for k in kernels]
+    tail_deviation = [maximum(abs, r) / maximum(target) for r in residuals]
+    tail_sum = [maximum(abs, cumsum(r)) / sum(target) for r in residuals]
+    i = something(findfirst(i -> tail_deviation[i] > tail_max || tail_sum[i] > tail_max, eachindex(lambdas)), lastindex(lambdas) + 1) - 1
+    i >= firstindex(lambdas) || throw(ArgumentError("smallest noise weight λ=$(first(lambdas)) gives a tail deviation of $(first(tail_deviation)) and a running sum of $(first(tail_sum)), above $tail_max"))
+    noise_out = [k.noise_out for k in kernels]
+    scan = (λ = lambdas, tail_deviation = tail_deviation, tail_sum = tail_sum, noise_out = noise_out)
+    merge((λ = lambdas[i],), kernels[i], (scan = scan,))
+end
+export wiener_optimization

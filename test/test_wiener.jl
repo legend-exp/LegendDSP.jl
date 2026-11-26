@@ -130,3 +130,47 @@ end
     @test_throws ArgumentError wiener_synthesis(noise, vcat(pulse, zeros(n)), vcat(target, zeros(n)), n_pre; λ, n_half = 40)
     @test_throws ArgumentError wiener_synthesis(noise, zeros(m), target, n_pre; λ = 0, n_half = 40)
 end
+
+@testset "wiener_optimization" begin
+    Δt = 16.0u"ns"
+    n, m, n_pre = 512, 200, 50
+    σ = 3.0
+    noise = (freq = (0:n÷2) ./ (n * Δt), psd = [k in (0, n ÷ 2) ? σ^2 * Δt : 2 * σ^2 * Δt for k in 0:n÷2])
+    lag = (1:m) .- (n_pre + 1)
+    target = exp.(-0.5 .* (lag ./ 3) .^ 2)
+    target ./= sum(target)
+    pulse = [l < 0 ? 0.0 : (1 - exp(-(l + 1) / 2)) * exp(-l / 25) for l in lag]
+    pulse ./= maximum(pulse)
+    lambdas = 10.0 .^ (-8:0.5:0)
+    tail = 12:100
+
+    opt = wiener_optimization(noise, pulse, target, n_pre; lambdas, tail, tail_max = 0.01, n_half = 100)
+    i = findfirst(==(opt.λ), lambdas)
+    @test first(lambdas) < opt.λ < last(lambdas)
+    @test length(opt.scan.λ) == length(opt.scan.tail_deviation) == length(opt.scan.tail_sum) == length(opt.scan.noise_out) == length(lambdas)
+
+    # every weight up to the chosen one keeps the tail, the next one does not
+    @test all(opt.scan.tail_deviation[1:i] .<= 0.01) && all(opt.scan.tail_sum[1:i] .<= 0.01)
+    @test opt.scan.tail_deviation[i+1] > 0.01 || opt.scan.tail_sum[i+1] > 0.01
+
+    # the scan holds what wiener_synthesis gives, and the chosen kernel is that of the chosen weight
+    s = wiener_synthesis(noise, pulse, target, n_pre; λ = opt.λ, n_half = 100)
+    @test opt.coeffs == s.coeffs && opt.response == s.response && opt.noise_out == s.noise_out == opt.scan.noise_out[i]
+    @test opt.spectrum == s.spectrum
+    d = s.response[n_pre+1 .+ tail] .- target[n_pre+1 .+ tail]
+    @test opt.scan.tail_deviation[i] ≈ maximum(abs, d) / maximum(target)
+    @test opt.scan.tail_sum[i] ≈ maximum(abs, cumsum(d)) / sum(target)
+    @test issorted(opt.scan.noise_out, rev = true)
+
+    # a wider limit allows a larger weight and less noise
+    wide = wiener_optimization(noise, pulse, target, n_pre; lambdas, tail, tail_max = 0.05, n_half = 100)
+    @test wide.λ > opt.λ && wide.noise_out < opt.noise_out
+
+    # all weights within the limit: the largest one
+    @test wiener_optimization(noise, pulse, target, n_pre; lambdas = lambdas[1:3], tail, tail_max = 0.01, n_half = 100).λ == lambdas[3]
+
+    @test_throws ArgumentError wiener_optimization(noise, pulse, target, n_pre; lambdas, tail, tail_max = 1e-12, n_half = 100)
+    @test_throws ArgumentError wiener_optimization(noise, pulse, target, n_pre; lambdas = reverse(lambdas), tail, tail_max = 0.01, n_half = 100)
+    @test_throws ArgumentError wiener_optimization(noise, pulse, target, n_pre; lambdas, tail = 12:m, tail_max = 0.01, n_half = 100)
+    @test_throws ArgumentError wiener_optimization(noise, pulse, target, n_pre; lambdas, tail = 0:100, tail_max = 0.01, n_half = 100)
+end
