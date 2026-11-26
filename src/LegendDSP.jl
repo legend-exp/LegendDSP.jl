@@ -23,6 +23,7 @@ using Statistics
 using ArgCheck
 using ArraysOfArrays
 using DocStringExtensions
+using FFTW: rfft
 using FillArrays
 using IntervalSets
 using RadiationDetectorDSP
@@ -55,6 +56,7 @@ include("dsp_icpc.jl")
 include("saturation.jl")
 include("interpolation.jl")
 include("dplms.jl")
+include("wiener.jl")
 include("intersect_maximum.jl")
 include("intersect_extrema.jl")
 include("dsp_sipm.jl")

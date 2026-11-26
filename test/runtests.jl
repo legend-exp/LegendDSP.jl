@@ -7,6 +7,7 @@ Test.@testset "Package LegendDSP" begin
     include("test_haar_filter.jl")
     include("test_interpolation.jl")
     include("test_dplms.jl")
+    include("test_wiener.jl")
     include("test_intersect_maximum.jl")
     include("test_intersect_extrema.jl")
     include("test_multiintersect.jl")
