@@ -20,6 +20,7 @@ Test.@testset "Package LegendDSP" begin
     include("test_thresholdstats.jl")
     include("test_baselinestats.jl")
     include("test_dsp_sipm.jl")
+    include("test_dsp_sipm_template.jl")
     include("test_filter_optimization_single_point.jl")
     isempty(Test.detect_ambiguities(LegendDSP))
 end # testset
