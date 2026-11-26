@@ -23,7 +23,7 @@ using Statistics
 using ArgCheck
 using ArraysOfArrays
 using DocStringExtensions
-using FFTW: rfft
+using FFTW: rfft, irfft
 using FillArrays
 using IntervalSets
 using RadiationDetectorDSP

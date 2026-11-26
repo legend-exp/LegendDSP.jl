@@ -73,3 +73,60 @@ end
 
     @test_throws ArgumentError wiener_noise_spectrum(traces[1:end-1, :], Δt)
 end
+
+@testset "wiener_synthesis" begin
+    Δt = 16.0u"ns"
+    n, m, n_pre = 512, 200, 50
+    σ = 3.0
+    # white noise of standard deviation σ, as wiener_noise_spectrum gives it for many traces: N = n σ² at every frequency
+    noise = (freq = (0:n÷2) ./ (n * Δt), psd = [k in (0, n ÷ 2) ? σ^2 * Δt : 2 * σ^2 * Δt for k in 0:n÷2])
+    lag = (1:m) .- (n_pre + 1)
+    target = exp.(-0.5 .* (lag ./ 3) .^ 2)
+    target ./= sum(target)
+
+    # a template of one sample: the kernel is the target, scaled by 1 / (1 + λ n σ²)
+    spike = [l == 0 ? 1.0 : 0.0 for l in lag]
+    λ = 1e-3
+    s = wiener_synthesis(noise, spike, target, n_pre; λ, n_half = 40)
+    scale = 1 / (1 + λ * n * σ^2)
+    @test length(s.coeffs) == 81
+    @test s.coeffs ≈ scale .* target[n_pre+1-40:n_pre+1+40]
+    @test s.response ≈ scale .* target
+    @test s.noise_out ≈ scale * σ * sqrt(sum(abs2, target))
+    @test s.spectrum.freq == noise.freq
+    @test s.spectrum.template ≈ ones(n ÷ 2 + 1)
+    @test s.spectrum.noise ≈ fill(n * σ^2, n ÷ 2 + 1)
+    @test first(s.spectrum.target) ≈ 1
+    @test s.spectrum.gain ≈ scale .* sqrt.(s.spectrum.target)
+
+    # a pulse with a fast rise and a slow decay: without noise weight the response is the target
+    pulse = [l < 0 ? 0.0 : (1 - exp(-(l + 1) / 2)) * exp(-l / 25) for l in lag]
+    pulse ./= maximum(pulse)
+    full = wiener_synthesis(noise, pulse, target, n_pre; λ = 1e-12, n_half = n ÷ 2 - 1)
+    @test maximum(abs.(full.response .- target)) < 1e-6
+    @test sum(full.response) ≈ 1
+
+    # the response is the template convolved with the coefficients, lag 0 in the middle
+    r = wiener_synthesis(noise, pulse, target, n_pre; λ = 1e-4, n_half = 100)
+    conv = [sum(r.coeffs[101+l] * pulse[i-l] for l in -100:100 if 1 <= i - l <= m) for i in 1:m]
+    @test r.response ≈ conv atol = 1e-10
+
+    # more noise weight: less noise after the kernel, a response farther from the target
+    weak, strong = wiener_synthesis(noise, pulse, target, n_pre; λ = 1e-6, n_half = 100), wiener_synthesis(noise, pulse, target, n_pre; λ = 1e-2, n_half = 100)
+    @test strong.noise_out < weak.noise_out
+    @test maximum(abs.(strong.response .- target)) > maximum(abs.(weak.response .- target))
+
+    # the predicted noise is that of noise traces through the coefficients, with the spectrum measured from them
+    rng = MersenneTwister(3)
+    traces = σ .* randn(rng, n, 2000)
+    measured = wiener_synthesis(wiener_noise_spectrum(traces, Δt), pulse, target, n_pre; λ = 1e-4, n_half = 100)
+    @test measured.coeffs ≈ r.coeffs rtol = 0.05
+    filtered = [sum(measured.coeffs[101+l] * traces[i-l, j] for l in -100:100) for i in 101:n-100, j in 1:200]
+    @test std(filtered) ≈ measured.noise_out rtol = 0.05
+
+    @test_throws DimensionMismatch wiener_synthesis(noise, pulse, target[1:end-1], n_pre; λ, n_half = 40)
+    @test_throws ArgumentError wiener_synthesis(noise, pulse, target, m; λ, n_half = 40)
+    @test_throws ArgumentError wiener_synthesis(noise, pulse, target, n_pre; λ, n_half = n ÷ 2)
+    @test_throws ArgumentError wiener_synthesis(noise, vcat(pulse, zeros(n)), vcat(target, zeros(n)), n_pre; λ, n_half = 40)
+    @test_throws ArgumentError wiener_synthesis(noise, zeros(m), target, n_pre; λ = 0, n_half = 40)
+end
