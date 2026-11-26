@@ -52,17 +52,5 @@ export thresholdstats_mad
 
 function thresholdstats_mad(input::RadiationDetectorDSP.SamplesOrWaveform{T}, min::RadiationDetectorDSP.RealQuantity = -Inf * unit(T), max::RadiationDetectorDSP.RealQuantity = Inf * unit(T)) where T
     _, Y = RadiationDetectorDSP._get_axis_and_signal(input)
-    _thresholdstats_mad_impl(Y, T(min), T(max))
-end
-
-function _thresholdstats_mad_impl(Y::AbstractArray{T}, _min::T, _max::T) where {T <: RealQuantity}
-    Y_filt = [y for y in Y if _min <= y <= _max]
-    isempty(Y_filt) && return zero(float(T))
-    med = median(Y_filt)
-    @inbounds @fastmath for i in eachindex(Y_filt)
-        Y_filt[i] = abs(Y_filt[i] - med)
-    end
-    # 1/Φ⁻¹(3/4) ≈ 1.4826, consistency constant for MAD under normality
-    # (Rousseeuw & Croux, J. Amer. Statist. Assoc. 88, 1993)
-    oftype(float(one(T)), 1.4826) * median!(Y_filt)
+    _madstats_impl(Y, T(min), T(max)).sigma
 end
